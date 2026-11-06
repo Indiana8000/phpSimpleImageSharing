@@ -76,7 +76,7 @@ header('Cache-Control: no-store, private');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Frame-Options: DENY');
-header("Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'");
+header("Content-Security-Policy: default-src 'none'; connect-src 'self'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'");
 $remoteAddress = (string)($_SERVER['REMOTE_ADDR'] ?? '');
 if (@inet_pton(trim($remoteAddress)) === false) $remoteAddress = '127.0.0.1';
 $loginThrottleKey = LoginRateLimiter::key($remoteAddress);

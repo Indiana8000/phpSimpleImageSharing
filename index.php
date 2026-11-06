@@ -634,7 +634,7 @@ function sharePath(string $token): string
     $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
     $basePath = dirname($scriptName);
     if ($basePath === '/' || $basePath === '.') $basePath = '';
-    return rtrim($basePath, '/') . '/s/' . rawurlencode($token);
+    return rtrim($basePath, '/') . '/' . rawurlencode($token);
 }
 
 function redirectToRickroll(): never

@@ -38,7 +38,7 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Dates are displayed as `YYYY-MM-DD`.
 - Video support is planned.
 
-Public share URLs use Apache `mod_rewrite` through the included `.htaccess`. If using another web server, configure `/s/<26-character-token>` to reach `index.php?share=<token>` and route other `/s/` paths to `index.php?invalid_share=1`.
+Public share URLs use a 26-character random path token, for example `https://example.com/<token>`. Apache `mod_rewrite` routes it to `index.php?share=<token>`. Older `/s/<token>` links continue to work; other `/s/` paths go to `index.php?invalid_share=1`. Configure equivalent routes if using another web server. Share tokens are bearer credentials, so Apache access logs may contain them; keep those logs private.
 
 ## Upload limits and maintenance
 

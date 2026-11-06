@@ -83,8 +83,8 @@ data_dir/
 
 - [x] Create explicit share links for individual media; keep the gallery sign-in-only.
 - [x] Allow generating a new link for a media item. The new link immediately replaces the old one (token rotation).
-- [x] Use short share URLs in the form `/s/<token>`; store token hashes in SQLite and compare them safely on access.
-- [x] Use a small number of explicit Apache `mod_rewrite` rules to route `/s/<token>` to `index.php`. PHP checks share status, expiration, and media permissions before serving anything.
+- [x] Use short share URLs with a 26-character token path; store token hashes in SQLite and compare them safely on access.
+- [x] Use explicit Apache `mod_rewrite` rules to route token paths and legacy `/s/<token>` paths to `index.php`. PHP checks share status, expiration, and media permissions before serving anything.
 - [ ] If media routes include extensions, match only explicitly allowed image/video extensions and compare them with the media type in SQLite; never use a URL parameter as a file path.
 - [ ] Keep share options minimal: revoke a link and optionally set an expiration date.
 - [x] Generate share tokens cryptographically at random and store their hashes separately from filenames; never log tokens or include them in errors.

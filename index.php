@@ -89,6 +89,8 @@ if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     session_regenerate_id(true);
     header('Location: ./'); exit;
 }
+if (array_key_exists('invalid_share', $_GET)) redirectToRickroll();
+if (array_key_exists('share', $_GET)) servePublicShare($pdo, $mediaStorage, (string)$_GET['share']);
 $currentUser = null;
 $sessionUserId = (string)($_SESSION['user_id'] ?? '');
 if ($sessionUserId !== '') {
@@ -188,6 +190,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failureCount = count($uploadResults) - $successCount;
             if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'image uploaded.' : 'images uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
+        } elseif ($action === 'create_share') {
+            $mediaId = (string)($_POST['id'] ?? '');
+            if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) throw new InvalidArgumentException('Invalid media ID.');
+            $findMedia = $pdo->prepare('SELECT id, owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
+            $findMedia->execute([':id' => $mediaId]);
+            $sharedMedia = $findMedia->fetch(PDO::FETCH_ASSOC);
+            if (!is_array($sharedMedia) || ($currentUser['role'] !== 'admin' && $sharedMedia['owner_id'] !== $currentUser['id'])) {
+                throw new RuntimeException('You cannot create a share link for this image.');
+            }
+            $tokenValue = generateShareToken();
+            $now = time();
+            $pdo->beginTransaction();
+            try {
+                $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
+                $revoke->execute([':revoked_at' => $now, ':media_id' => $mediaId]);
+                $insert = $pdo->prepare(
+                    'INSERT INTO share_links (id, media_id, token_hash, created_at, expires_at, revoked_at)
+                     VALUES (:id, :media_id, :token_hash, :created_at, :expires_at, NULL)'
+                );
+                $insert->execute([
+                    ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId,
+                    ':token_hash' => hash('sha256', $tokenValue), ':created_at' => $now,
+                    ':expires_at' => $sharedMedia['expires_at'],
+                ]);
+                $pdo->commit();
+            } catch (Throwable $exception) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $exception;
+            }
+            $sharePath = sharePath($tokenValue);
+            $notice = 'New share link generated. Any previous link for this image is now invalid. <a href="' . h($sharePath) . '">Open share</a> <code class="share-url">' . h($sharePath) . '</code><button type="button" class="inline-action" data-copy-link="' . h($sharePath) . '">Copy share link</button>';
         } elseif ($action === 'delete') {
             $id = (string)($_POST['id'] ?? '');
             $statement = $pdo->prepare('SELECT owner_id, storage_name FROM media WHERE id = :id LIMIT 1');
@@ -264,8 +297,8 @@ foreach ($images as $image) {
     $imageUrl = '?action=image&id=' . rawurlencode($id);
     $name = (string)$image['original_name'];
     $created = (int)$image['created_at'];
-    $canDelete = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
-    echo '<article class="photo-card"><a class="photo" href="' . h($imageUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time><small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions"><button type="button" class="text-action" data-copy-link="' . h($imageUrl) . '">Copy link</button>' . ($canDelete ? '<form method="post" action="?action=delete" onsubmit="return confirm(\'Delete this image?\')"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
+    $canManage = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
+    echo '<article class="photo-card"><a class="photo" href="' . h($imageUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time><small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" onsubmit="return confirm(\'Delete this image?\')"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
 }
 echo '</div><form class="logout" method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button class="text-action">Sign out</button></form><div class="toast" id="toast" role="status" aria-live="polite"></div>';
 pageEnd();
@@ -282,7 +315,7 @@ function pageStart(string $title): void {
     .text-action,.inline-action{border:0;background:none;color:var(--accent);font:inherit;font-size:11px;padding:2px 0;cursor:pointer;text-decoration:none}.text-action:hover,.inline-action:hover{text-decoration:underline}.danger{color:var(--danger)}.error,.notice{padding:12px 14px;border:1px solid var(--line);border-radius:9px;font-size:13px;margin:0 0 15px}.error{color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,var(--surface))}.notice{background:var(--tint);color:var(--ink)}.notice a{color:var(--accent);font-weight:650}.notice .inline-action{margin-left:10px}.empty{padding:48px 20px;text-align:center;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.empty-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--tint);color:var(--accent);font-size:21px;margin:0 auto 12px}.empty h2{font:500 20px Georgia,serif;margin:0 0 6px}.empty p{color:var(--muted);font-size:13px;margin:0}.logout{display:flex;justify-content:flex-end;margin-top:34px}.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:9px;font-size:12px;transition:opacity .18s,transform .18s}.toast.show{opacity:1;transform:translate(-50%,0)}a{color:var(--accent)}
     @media(max-width:600px){.app-shell{padding:0 15px 32px}.topbar{height:64px;margin-bottom:29px}.welcome{align-items:flex-start}.welcome h1{font-size:33px}.upload{align-items:stretch;flex-wrap:wrap;padding:12px;gap:9px}.upload-copy{width:100%;margin:0 0 4px}.file-control{flex:1}.file-control span,.primary{height:38px;display:grid;place-items:center}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.photo-info{padding:9px}.photo-actions{gap:8px}.theme-toggle{padding:7px 9px}}@media(max-width:380px){.grid{grid-template-columns:1fr}.photo{aspect-ratio:16/10}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
     </style><body><div class="app-shell"><header class="topbar"><a class="brand" href="./"><span class="brand-mark">P</span>phpSimpleImageSharing</a><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button">Theme: System</button></div></header><main>';
-    echo '<style>.login-panel{max-width:460px;margin:0 auto;padding:28px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.login-panel h1{font:500 32px/1.2 Georgia,serif;letter-spacing:-.04em;margin:0}.login-panel .subheading{margin-bottom:24px}.login-form{display:grid;gap:9px}.login-form label,.user-create label,.password-reset{font-size:12px;font-weight:650}.login-form input,.user-create input,.user-create select,.password-reset input{font:inherit;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.login-form .primary{margin-top:5px}.welcome-actions{display:flex;align-items:center;gap:9px}.admin-panel{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.admin-panel h2{font-size:15px;margin:0}.admin-panel>p{color:var(--muted);font-size:12px;margin:3px 0 16px}.user-create{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;align-items:end}.user-create label,.password-reset{display:grid;gap:5px}.user-create .primary{height:39px}.user-list{display:grid;gap:9px}.user-card{display:flex;align-items:center;gap:15px;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.user-card>div:first-child{flex:1;min-width:140px}.user-card strong,.user-card small{display:block}.user-card strong{font-size:13px}.user-card small{color:var(--muted);font-size:11px}.user-actions{display:flex;align-items:end;gap:8px;margin:0}.password-reset input{width:145px;padding:7px}.photo-info .owner-label{display:block;color:var(--muted);font-size:10px;margin-top:3px}@media(max-width:750px){.user-create{grid-template-columns:repeat(2,minmax(0,1fr))}.user-card{flex-wrap:wrap}.user-card>div:first-child{flex-basis:100%}.password-reset input{width:130px}}@media(max-width:600px){.login-panel{padding:20px}.brand{font-size:13px;letter-spacing:-.07em}.brand-mark{width:25px;height:25px}.welcome-actions{align-items:flex-end;flex-direction:column}.user-create{grid-template-columns:1fr}.user-card{align-items:flex-start}.user-actions{flex-wrap:wrap}}</style>';
+    echo '<style>.login-panel{max-width:460px;margin:0 auto;padding:28px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.login-panel h1{font:500 32px/1.2 Georgia,serif;letter-spacing:-.04em;margin:0}.login-panel .subheading{margin-bottom:24px}.login-form{display:grid;gap:9px}.login-form label,.user-create label,.password-reset{font-size:12px;font-weight:650}.login-form input,.user-create input,.user-create select,.password-reset input{font:inherit;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.login-form .primary{margin-top:5px}.welcome-actions{display:flex;align-items:center;gap:9px}.admin-panel{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.admin-panel h2{font-size:15px;margin:0}.admin-panel>p{color:var(--muted);font-size:12px;margin:3px 0 16px}.user-create{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;align-items:end}.user-create label,.password-reset{display:grid;gap:5px}.user-create .primary{height:39px}.user-list{display:grid;gap:9px}.user-card{display:flex;align-items:center;gap:15px;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.user-card>div:first-child{flex:1;min-width:140px}.user-card strong,.user-card small{display:block}.user-card strong{font-size:13px}.user-card small{color:var(--muted);font-size:11px}.user-actions{display:flex;align-items:end;gap:8px;margin:0}.password-reset input{width:145px;padding:7px}.photo-info .owner-label{display:block;color:var(--muted);font-size:10px;margin-top:3px}.share-url{font-size:12px;padding:2px 6px;background:var(--quiet);border-radius:5px;color:var(--ink)}@media(max-width:750px){.user-create{grid-template-columns:repeat(2,minmax(0,1fr))}.user-card{flex-wrap:wrap}.user-card>div:first-child{flex-basis:100%}.password-reset input{width:130px}}@media(max-width:600px){.login-panel{padding:20px}.brand{font-size:13px;letter-spacing:-.07em}.brand-mark{width:25px;height:25px}.welcome-actions{align-items:flex-end;flex-direction:column}.user-create{grid-template-columns:1fr}.user-card{align-items:flex-start}.user-actions{flex-wrap:wrap}}</style>';
     echo '<style>.upload{flex-wrap:wrap}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:#56815f}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
 }
 function pageEnd(): void {
@@ -384,4 +417,71 @@ function normalizeUploads(mixed $upload): array
         ];
     }
     return $files;
+}
+
+/** Return a compact 128-bit Crockford Base32 share token. */
+function generateShareToken(): string
+{
+    $alphabet = '0123456789abcdefghjkmnpqrstvwxyz';
+    $bytes = random_bytes(16);
+    $buffer = 0;
+    $bits = 0;
+    $encoded = '';
+    for ($index = 0, $length = strlen($bytes); $index < $length; $index++) {
+        $buffer = ($buffer << 8) | ord($bytes[$index]);
+        $bits += 8;
+        while ($bits >= 5) {
+            $bits -= 5;
+            $encoded .= $alphabet[($buffer >> $bits) & 31];
+            $buffer &= (1 << $bits) - 1;
+        }
+    }
+    if ($bits > 0) $encoded .= $alphabet[($buffer << (5 - $bits)) & 31];
+    return $encoded;
+}
+
+function sharePath(string $token): string
+{
+    $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
+    $basePath = dirname($scriptName);
+    if ($basePath === '/' || $basePath === '.') $basePath = '';
+    return rtrim($basePath, '/') . '/s/' . rawurlencode($token);
+}
+
+function redirectToRickroll(): never
+{
+    header('Cache-Control: no-store, private');
+    header('Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ', true, 302);
+    exit;
+}
+
+function servePublicShare(PDO $pdo, MediaStorage $storage, string $token): never
+{
+    $token = strtolower($token);
+    if (!preg_match('/\A[0-9abcdefghjkmnpqrstvwxyz]{26}\z/', $token)) redirectToRickroll();
+    $statement = $pdo->prepare(
+        'SELECT media.owner_id, media.storage_name, media.mime
+         FROM share_links
+         JOIN media ON media.id = share_links.media_id
+         WHERE share_links.token_hash = :token_hash
+           AND share_links.revoked_at IS NULL
+           AND (share_links.expires_at IS NULL OR share_links.expires_at > :link_now)
+           AND (media.expires_at IS NULL OR media.expires_at > :media_now)
+         LIMIT 1'
+    );
+    $now = time();
+    $statement->execute([':token_hash' => hash('sha256', $token), ':link_now' => $now, ':media_now' => $now]);
+    $media = $statement->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($media)) redirectToRickroll();
+    if (!in_array($media['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) { http_response_code(404); exit; }
+    $file = $storage->locate((string)$media['owner_id'], (string)$media['storage_name']);
+    if ($file === null) { http_response_code(404); exit; }
+    header('Content-Type: ' . $media['mime']);
+    header('Content-Length: ' . filesize($file));
+    header('Content-Security-Policy: default-src \'none\'; sandbox');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Robots-Tag: noindex, nofollow');
+    header('Cache-Control: private, no-store');
+    readfile($file);
+    exit;
 }

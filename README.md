@@ -28,8 +28,12 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Individual administrator and member accounts; public self-registration is disabled.
 - All signed-in users can view the group gallery. Members can delete their own uploads; administrators can delete any upload and manage accounts.
 - Drag-and-drop and multi-image upload with per-file progress and retry for failures.
+- Generate a public, unguessable share link for one image. Generating another link revokes the previous one; links expire when the image expires.
+- Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
 - JPEG, PNG, GIF, and WebP uploads, limited to 12 MiB by default.
 - Dates are displayed as `YYYY-MM-DD`.
-- Image links currently require sign-in; public share links and video support are planned, but not implemented yet.
+- Video support and selectable image retention are planned, but not implemented yet.
+
+Public share URLs use Apache `mod_rewrite` through the included `.htaccess`. If using another web server, configure `/s/<26-character-token>` to reach `index.php?share=<token>` and route other `/s/` paths to `index.php?invalid_share=1`.
 
 The PHP `upload_max_filesize` and `post_max_size` limits must be at least as large as the configured phpSimpleImageSharing limit. Keep PHP and the web server updated. Back up the entire data directory, including the SQLite database and all media folders, as one set.

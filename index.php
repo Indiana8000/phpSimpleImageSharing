@@ -159,9 +159,19 @@ if ($currentUser === null) {
             $error = $failures >= 5 ? 'Too many failed sign-in attempts. Try again in 15 minutes.' : 'Incorrect username or password.';
         }
     }
-    pageStart('Sign in');
-    if ($error) echo '<p class="error">' . h($error) . '</p>';
-    echo '<section class="login-panel"><p class="eyebrow">Your private album</p><h1>Welcome back</h1><p class="subheading">Sign in to view the photos you share with friends.</p><form class="login-form" method="post" action="?action=login"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><label for="username">Username</label><input id="username" name="username" required autocomplete="username" autofocus><label for="password">Password</label><input id="password" type="password" name="password" required autocomplete="current-password"><button class="primary">Sign in</button></form></section>';
+    pageStart('Sign in', 'plain');
+    ?>
+<div class="login">
+  <form class="login-form" method="post" action="?action=login">
+    <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+    <div><h1>Sign in</h1><p class="sub">Photos shared among friends. Ask an administrator if you need an account.</p></div>
+    <?php if ($error): ?><p class="banner error" role="alert"><?= h($error) ?></p><?php endif; ?>
+    <label>Username<input name="username" required autocomplete="username" autofocus></label>
+    <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="btn primary">Sign in</button>
+  </form>
+</div>
+<?php
     pageEnd(); exit;
 }
 
@@ -214,9 +224,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'bulk') {
             $bulkAction = is_string($_POST['bulk_action'] ?? null) ? (string)$_POST['bulk_action'] : '';
             $selectedIds = $_POST['ids'] ?? [];
-            if (!is_array($selectedIds) || count($selectedIds) > 100) throw new InvalidArgumentException('Select up to 100 images at a time.');
+            if (!is_array($selectedIds) || count($selectedIds) > 100) throw new InvalidArgumentException('Select up to 100 photos at a time.');
             $selectedIds = array_values(array_unique(array_filter($selectedIds, static fn(mixed $id): bool => is_string($id) && preg_match('/\A[a-f0-9]{32,64}\z/', $id))));
-            if (!in_array($bulkAction, ['copy', 'delete'], true) || $selectedIds === []) throw new InvalidArgumentException('Select at least one image and choose an action.');
+            if (!in_array($bulkAction, ['copy', 'delete'], true) || $selectedIds === []) throw new InvalidArgumentException('Select at least one photo and choose an action.');
             if ($bulkAction === 'copy') {
                 $paths = [];
                 $find = $pdo->prepare('SELECT id FROM media WHERE id = :id AND (expires_at IS NULL OR expires_at > :now) LIMIT 1');
@@ -242,19 +252,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $delete->execute([':id' => $selectedId]);
                 $deletedCount += $delete->rowCount();
             }
-            if ($deletedCount > 0) $_SESSION['flash_notice'] = 'Deleted ' . $deletedCount . ' ' . ($deletedCount === 1 ? 'image.' : 'images.');
-            else $_SESSION['flash_error'] = 'No selected images could be deleted.';
+            if ($deletedCount > 0) $_SESSION['flash_notice'] = 'Deleted ' . $deletedCount . ' ' . ($deletedCount === 1 ? 'photo.' : 'photos.');
+            else $_SESSION['flash_error'] = 'No selected photos could be deleted.';
             $returnQuery = [
                 'q' => is_string($_POST['return_q'] ?? null) ? substr((string)$_POST['return_q'], 0, 120) : '',
                 'sort' => is_string($_POST['return_sort'] ?? null) && $_POST['return_sort'] === 'oldest' ? 'oldest' : 'newest',
+                'filter' => is_string($_POST['return_filter'] ?? null) && in_array($_POST['return_filter'], ['mine', 'expiring'], true) ? $_POST['return_filter'] : 'all',
                 'page' => is_scalar($_POST['return_page'] ?? null) ? max(1, (int)$_POST['return_page']) : 1,
             ];
-            header('Location: ./?' . http_build_query($returnQuery));
+            $returnString = cleanQuery($returnQuery);
+            header('Location: ./' . ($returnString !== '' ? '?' . $returnString : ''));
             exit;
         } elseif ($action === 'upload') {
             $retentionDays = (string)($_POST['retention'] ?? 'never');
             if (!in_array($retentionDays, ['never', '1', '7', '30'], true)) {
-                throw new InvalidArgumentException('Choose a valid image retention period.');
+                throw new InvalidArgumentException('Choose a valid retention period.');
             }
             $expiresAt = $retentionDays === 'never' ? null : time() + ((int)$retentionDays * 86400);
             $uploads = normalizeUploads($_FILES['images'] ?? ($_FILES['image'] ?? null));
@@ -294,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $successCount = count(array_filter($uploadResults, static fn(array $item): bool => $item['success']));
             $failureCount = count($uploadResults) - $successCount;
-            if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'image uploaded.' : 'images uploaded.');
+            if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'photo uploaded.' : 'photos uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
         } elseif ($action === 'create_share') {
             $mediaId = (string)($_POST['id'] ?? '');
@@ -303,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $findMedia->execute([':id' => $mediaId]);
             $sharedMedia = $findMedia->fetch(PDO::FETCH_ASSOC);
             if (!is_array($sharedMedia) || ($currentUser['role'] !== 'admin' && $sharedMedia['owner_id'] !== $currentUser['id'])) {
-                throw new RuntimeException('You cannot create a share link for this image.');
+                throw new RuntimeException('You cannot create a share link for this photo.');
             }
             $tokenValue = generateShareToken();
             $now = time();
@@ -325,8 +337,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $exception;
             }
-            $sharePath = sharePath($tokenValue);
-            $notice = 'New share link generated. Any previous link for this image is now invalid. <a href="' . h($sharePath) . '">Open share</a> <code class="share-url">' . h($sharePath) . '</code><button type="button" class="inline-action" data-copy-link="' . h($sharePath) . '">Copy share link</button>';
+            $_SESSION['flash_share'] = ['id' => $mediaId, 'path' => sharePath($tokenValue)];
+            $_SESSION['flash_notice'] = 'New share link created. The old link no longer works.';
+            $returnQuery = [
+                'action' => 'detail',
+                'id' => $mediaId,
+                'q' => is_string($_POST['return_q'] ?? null) ? substr((string)$_POST['return_q'], 0, 120) : '',
+                'sort' => is_string($_POST['return_sort'] ?? null) && $_POST['return_sort'] === 'oldest' ? 'oldest' : 'newest',
+                'filter' => is_string($_POST['return_filter'] ?? null) && in_array($_POST['return_filter'], ['mine', 'expiring'], true) ? $_POST['return_filter'] : 'all',
+                'page' => is_scalar($_POST['return_page'] ?? null) ? max(1, (int)$_POST['return_page']) : 1,
+            ];
+            header('Location: ./?' . cleanQuery($returnQuery));
+            exit;
         } elseif ($action === 'delete') {
             $id = (string)($_POST['id'] ?? '');
             $statement = $pdo->prepare('SELECT owner_id, storage_name FROM media WHERE id = :id LIMIT 1');
@@ -336,9 +358,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mediaStorage->delete((string)$media['owner_id'], (string)$media['storage_name']);
                 $delete = $pdo->prepare('DELETE FROM media WHERE id = :id');
                 $delete->execute([':id' => $id]);
-                $_SESSION['flash_notice'] = 'Image deleted.';
+                $_SESSION['flash_notice'] = 'Photo deleted.';
             } else {
-                $_SESSION['flash_error'] = 'This image could not be deleted.';
+                $_SESSION['flash_error'] = 'This photo could not be deleted.';
             }
             header('Location: ./'); exit;
         } elseif ($action === 'create_user') {
@@ -356,6 +378,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (InvalidArgumentException | RuntimeException $exception) {
         $error = $exception->getMessage();
+        if ($action === 'create_share' && is_string($_POST['id'] ?? null)) { $action = 'detail'; $_GET['id'] = $_POST['id']; }
         if (in_array($action, ['create_user', 'reset_user_password', 'set_user_active'], true)) $action = 'users';
     } catch (Throwable $exception) {
         error_log('phpSimpleImageSharing request error: ' . $exception->getMessage());
@@ -386,6 +409,13 @@ $searchTerm = is_string($rawSearch) ? trim(substr($rawSearch, 0, 120)) : '';
 if ($searchTerm !== '') {
     $images = array_values(array_filter($images, static fn(array $image): bool => stripos((string)$image['original_name'], $searchTerm) !== false));
 }
+$rawFilter = $_GET['filter'] ?? 'all';
+$filter = is_string($rawFilter) && in_array($rawFilter, ['mine', 'expiring'], true) ? $rawFilter : 'all';
+if ($filter === 'mine') {
+    $images = array_values(array_filter($images, static fn(array $image): bool => $image['owner_id'] === $currentUser['id']));
+} elseif ($filter === 'expiring') {
+    $images = array_values(array_filter($images, static fn(array $image): bool => $image['expires_at'] !== null && (int)$image['expires_at'] - time() < 3 * 86400));
+}
 usort($images, static function (array $left, array $right) use ($sortOrder): int {
     $comparison = ((int)$left['created_at'] <=> (int)$right['created_at']) ?: strcmp((string)$left['id'], (string)$right['id']);
     return $sortOrder === 'newest' ? -$comparison : $comparison;
@@ -396,6 +426,7 @@ $pageCount = max(1, (int)ceil($totalImageCount / $imagesPerPage));
 $rawPage = $_GET['page'] ?? 1;
 $galleryPage = min($pageCount, max(1, is_scalar($rawPage) ? (int)$rawPage : 1));
 $allGalleryImages = $images;
+$listParams = ['q' => $searchTerm, 'sort' => $sortOrder, 'filter' => $filter, 'page' => $galleryPage];
 $images = array_slice($images, ($galleryPage - 1) * $imagesPerPage, $imagesPerPage);
 if ($action === 'users' && $currentUser['role'] === 'admin') {
     $users = Auth::listUsers($pdo, $currentUser);
@@ -415,19 +446,72 @@ if ($action === 'users' && $currentUser['role'] === 'admin') {
         ['ok' => $uploadLimitsOkay, 'label' => 'Upload limits', 'detail' => ($maxBytes > 0 ? 'Maximum image size: ' . formatBytes($maxBytes) . ' per file. PHP upload_max_filesize: ' . ini_get('upload_max_filesize') . '; post_max_size: ' . $postLimitLabel . ' (allow 1 MiB above the file limit for form data).' : 'Set max_upload_bytes to a positive value in config.php')],
         ['ok' => true, 'label' => 'Private storage', 'detail' => 'Writable and outside the public web root'],
     ];
-    pageStart('Manage users');
-    if ($error) echo '<p class="error">' . h($error) . '</p>';
-    if ($notice) echo '<p class="notice">' . h($notice) . '</p>';
-    echo '<section class="welcome"><div><p class="eyebrow">Administration</p><h1>Manage users</h1><p class="subheading">Create and manage access for your friends.</p></div><a class="quiet-button" href="./">Back to gallery</a></section>';
-    echo '<section class="admin-panel"><h2>Create an account</h2><p>Passwords must contain at least 12 characters.</p><form class="user-create" method="post" action="?action=create_user"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><label>Username<input name="username" required minlength="3" maxlength="32" autocomplete="off"></label><label>Display name<input name="display_name" required maxlength="80"></label><label>Temporary password<input name="password" type="password" required minlength="12" autocomplete="new-password"></label><label>Role<select name="role"><option value="member">Member</option><option value="admin">Administrator</option></select></label><button class="primary">Create account</button></form></section>';
-    echo '<section class="admin-panel"><h2>System status</h2><p>Checks for common shared-hosting setup issues.</p><ul class="system-checks">';
-    foreach ($systemChecks as $check) echo '<li><span class="check-mark ' . ($check['ok'] ? 'ok' : 'issue') . '" aria-hidden="true">' . ($check['ok'] ? '✓' : '!') . '</span><div><strong>' . h($check['label']) . '</strong><small><span class="check-status">' . ($check['ok'] ? 'OK' : 'Action needed') . '</span> · ' . h($check['detail']) . '</small></div></li>';
-    echo '</ul><p class="storage-usage">Stored media: ' . (int)($storageStats['media_count'] ?? 0) . ' files · ' . h(formatBytes((int)($storageStats['media_bytes'] ?? 0))) . '</p></section>';
-    echo '<div class="section-heading"><div><h2>Accounts</h2><p>' . count($users) . ' users</p></div></div><div class="user-list">';
-    foreach ($users as $account) {
-        echo '<article class="user-card"><div><strong>' . h($account['display_name']) . '</strong><small>@' . h($account['username']) . ' · ' . h(ucfirst($account['role'])) . ' · ' . ((int)$account['active'] === 1 ? 'Active' : 'Disabled') . '</small></div><form class="user-actions" method="post" action="?action=set_user_active"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="user_id" value="' . h($account['id']) . '"><input type="hidden" name="active" value="' . ((int)$account['active'] === 1 ? '0' : '1') . '"><button class="text-action">' . ((int)$account['active'] === 1 ? 'Disable' : 'Enable') . '</button></form><form class="user-actions" method="post" action="?action=reset_user_password"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="user_id" value="' . h($account['id']) . '"><label class="password-reset">New password<input type="password" name="new_password" required minlength="12" autocomplete="new-password"></label><button class="text-action">Reset password</button></form></article>';
-    }
-    echo '</div><div class="toast" id="toast" role="status" aria-live="polite"></div>';
+    $createFailed = ($_GET['action'] ?? '') === 'create_user' && $error !== '';
+    pageStart('People');
+    if ($error) echo '<p class="banner error" role="alert">' . h($error) . '</p>';
+    if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
+    ?>
+<div class="title-row">
+  <div><h1>People</h1><p class="sub">Everyone here can see all photos. Members can delete only their own.</p></div>
+  <a class="btn" href="./"><?= icon('back') ?>Back to photos</a>
+</div>
+<div class="cols">
+  <div>
+    <details class="add-person"<?= $createFailed ? ' open' : '' ?>>
+      <summary class="btn primary"><?= icon('plus') ?>Add person</summary>
+      <form method="post" action="?action=create_user">
+        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+        <div class="form-grid">
+          <label>Username<input name="username" required minlength="3" maxlength="32" autocomplete="off"></label>
+          <label>Display name<input name="display_name" required maxlength="80"></label>
+          <label>Temporary password<input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
+          <label>Role<select name="role"><option value="member">Member</option><option value="admin">Administrator</option></select></label>
+        </div>
+        <p class="hint">Passwords need at least 12 characters.</p>
+        <div class="foot" style="justify-content:flex-start"><button class="btn primary">Create account</button></div>
+      </form>
+    </details>
+    <div class="list">
+<?php foreach ($users as $account):
+        $isSelf = (string)$account['id'] === (string)$currentUser['id'];
+        $isActive = (int)$account['active'] === 1; ?>
+      <div class="person">
+        <?= avatar((string)$account['id'], (string)$account['display_name']) ?>
+        <div class="n"><b><?= h((string)$account['display_name']) ?></b><span>@<?= h((string)$account['username']) ?></span></div>
+        <span class="pill<?= $account['role'] === 'admin' ? ' admin' : '' ?>"><?= $account['role'] === 'admin' ? 'Administrator' : 'Member' ?></span>
+        <?php if (!$isActive): ?><span class="pill off">Disabled</span><?php endif; ?>
+        <details class="reset">
+          <summary class="btn sm">Reset password</summary>
+          <form class="reset-form" method="post" action="?action=reset_user_password">
+            <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+            <input type="hidden" name="user_id" value="<?= h((string)$account['id']) ?>">
+            <input type="password" name="new_password" required minlength="12" autocomplete="new-password" placeholder="New password, 12+ characters" aria-label="New password for <?= h((string)$account['display_name']) ?>">
+            <button class="btn primary sm">Save password</button>
+          </form>
+        </details>
+        <?php if (!$isSelf): ?>
+        <form method="post" action="?action=set_user_active">
+          <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+          <input type="hidden" name="user_id" value="<?= h((string)$account['id']) ?>">
+          <input type="hidden" name="active" value="<?= $isActive ? '0' : '1' ?>">
+          <button class="btn sm ghost<?= $isActive ? ' danger' : '' ?>"><?= $isActive ? 'Disable' : 'Enable' ?></button>
+        </form>
+        <?php endif; ?>
+      </div>
+<?php endforeach; ?>
+    </div>
+  </div>
+  <aside class="side">
+    <h2>System check</h2>
+    <ul class="chk-l">
+<?php foreach ($systemChecks as $check): ?>
+      <li><span class="d <?= $check['ok'] ? 'ok' : 'bad' ?>" aria-hidden="true"><?= $check['ok'] ? icon('check') : '!' ?></span><div><?= h($check['label']) ?> <span class="sr"><?= $check['ok'] ? 'OK' : 'Action needed' ?></span><small><?= h($check['detail']) ?></small></div></li>
+<?php endforeach; ?>
+    </ul>
+    <p class="sub" style="margin-top:18px"><b style="color:var(--ink)"><?= h(formatBytes((int)($storageStats['media_bytes'] ?? 0))) ?></b> used by <?= (int)($storageStats['media_count'] ?? 0) ?> files</p>
+  </aside>
+</div>
+<?php
     pageEnd(); exit;
 }
 if ($action === 'detail') {
@@ -437,99 +521,573 @@ if ($action === 'detail') {
     foreach ($allGalleryImages as $index => $image) {
         if (hash_equals((string)$image['id'], $detailId)) { $detailIndex = $index; break; }
     }
-    if ($detailIndex === null) { http_response_code(404); pageStart('Image not found'); echo '<p class="error">This image is unavailable.</p><a class="quiet-button" href="./">Back to gallery</a>'; pageEnd(); exit; }
+    if ($detailIndex === null) {
+        http_response_code(404);
+        pageStart('Photo not found');
+        ?>
+<div class="empty"><h2>This photo is not available</h2><p>It may have been deleted or has expired.</p><p><a class="btn" href="./">Back to photos</a></p></div>
+<?php
+        pageEnd(); exit;
+    }
     $detail = $allGalleryImages[$detailIndex];
-    $previousUrl = $detailIndex > 0 ? '?' . http_build_query(['action' => 'detail', 'id' => $allGalleryImages[$detailIndex - 1]['id'], 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]) : null;
-    $nextUrl = $detailIndex + 1 < count($allGalleryImages) ? '?' . http_build_query(['action' => 'detail', 'id' => $allGalleryImages[$detailIndex + 1]['id'], 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]) : null;
+    $detailLink = static fn(array $target): string => '?' . cleanQuery(['action' => 'detail', 'id' => $target['id']] + $listParams);
+    $previousUrl = $detailIndex > 0 ? $detailLink($allGalleryImages[$detailIndex - 1]) : null;
+    $nextUrl = $detailIndex + 1 < count($allGalleryImages) ? $detailLink($allGalleryImages[$detailIndex + 1]) : null;
+    $backUrl = '?' . cleanQuery($listParams);
     $detailImageUrl = '?action=image&id=' . rawurlencode((string)$detail['id']);
-    pageStart((string)$detail['original_name']);
-    echo '<section class="detail-heading"><a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage])) . '">← Back to gallery</a><nav class="detail-nav" aria-label="Image navigation">' . ($previousUrl === null ? '<span class="quiet-button disabled">← Previous</span>' : '<a class="quiet-button" href="' . h($previousUrl) . '" rel="prev">← Previous</a>') . '<span>' . ($detailIndex + 1) . ' of ' . count($allGalleryImages) . '</span>' . ($nextUrl === null ? '<span class="quiet-button disabled">Next →</span>' : '<a class="quiet-button" href="' . h($nextUrl) . '" rel="next">Next →</a>') . '</nav></section>';
-    echo '<article class="detail-card"><img class="detail-image" src="' . h($detailImageUrl) . '" alt="' . h((string)$detail['original_name']) . '"><div class="detail-info"><div><h1>' . h((string)$detail['original_name']) . '</h1><p>' . h(date('Y-m-d', (int)$detail['created_at'])) . ' · Uploaded by ' . h((string)$detail['display_name']) . '</p></div><div class="detail-actions"><a class="quiet-button" href="?action=download&id=' . rawurlencode((string)$detail['id']) . '">Download original</a><button type="button" class="quiet-button" data-copy-link="' . h($detailImageUrl) . '">Copy private link</button></div></div></article><div class="toast" id="toast" role="status" aria-live="polite"></div>';
+    $canManage = $currentUser['role'] === 'admin' || $detail['owner_id'] === $currentUser['id'];
+    $detailExpiry = expiryInfo($detail, time());
+    $flashShare = $_SESSION['flash_share'] ?? null;
+    unset($_SESSION['flash_share']);
+    $shownShare = is_array($flashShare) && hash_equals((string)($flashShare['id'] ?? ''), (string)$detail['id']) ? (string)($flashShare['path'] ?? '') : '';
+    $hasShare = false;
+    if ($canManage) {
+        $shareStatement = $pdo->prepare('SELECT 1 FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now) LIMIT 1');
+        $shareStatement->execute([':id' => (string)$detail['id'], ':now' => time()]);
+        $hasShare = $shareStatement->fetchColumn() !== false;
+    }
+    pageStart((string)$detail['original_name'], 'viewer');
+    ?>
+<div class="vwrap">
+  <div class="vtop">
+    <a class="icon-btn" href="<?= h($backUrl) ?>" aria-label="Back to photos"><?= icon('back') ?></a>
+    <div class="t"><b><?= h((string)$detail['original_name']) ?></b><span><?= $detailIndex + 1 ?> of <?= count($allGalleryImages) ?></span></div>
+  </div>
+  <div class="vbody">
+    <div class="stage">
+      <img src="<?= h($detailImageUrl) ?>" alt="<?= h((string)$detail['original_name']) ?>">
+      <?php if ($previousUrl !== null): ?><a class="nav l" href="<?= h($previousUrl) ?>" rel="prev" aria-label="Previous photo"><?= icon('back') ?></a><?php endif; ?>
+      <?php if ($nextUrl !== null): ?><a class="nav r" href="<?= h($nextUrl) ?>" rel="next" aria-label="Next photo"><?= icon('next') ?></a><?php endif; ?>
+    </div>
+    <aside class="panel">
+      <?php if ($error): ?><p class="banner error" role="alert"><?= h($error) ?></p><?php endif; ?>
+      <?php if ($notice): ?><p class="banner" role="status"><?= h($notice) ?></p><?php endif; ?>
+      <dl>
+        <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
+        <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
+        <dt>Size</dt><dd><?= h(formatBytes((int)$detail['size_bytes'])) ?></dd>
+        <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
+      </dl>
+<?php if ($canManage): ?>
+<?php if ($shownShare !== ''): ?>
+      <div class="share-result">
+        <label for="shareUrl">Share link</label>
+        <div class="link"><input id="shareUrl" class="share-url" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
+      </div>
+<?php endif; ?>
+      <form method="post" action="?action=create_share">
+        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+        <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
+        <input type="hidden" name="return_q" value="<?= h($searchTerm) ?>"><input type="hidden" name="return_sort" value="<?= h($sortOrder) ?>"><input type="hidden" name="return_filter" value="<?= h($filter) ?>"><input type="hidden" name="return_page" value="<?= (int)$galleryPage ?>">
+        <button class="btn primary"><?= icon('link') ?><?= $hasShare || $shownShare !== '' ? 'Create new share link' : 'Create share link' ?></button>
+      </form>
+      <p class="hint" style="margin-top:8px">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
+<?php endif; ?>
+      <a class="btn" href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>"><?= icon('download') ?>Download original</a>
+      <button type="button" class="btn" data-copy-link="<?= h($detailImageUrl) ?>"><?= icon('copy') ?>Copy link for signed-in friends</button>
+<?php if ($canManage): ?>
+      <form method="post" action="?action=delete" data-confirm="<?= h('Delete ' . (string)$detail['original_name'] . '?') ?>">
+        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+        <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
+        <button class="btn danger"><?= icon('trash') ?>Delete photo</button>
+      </form>
+<?php endif; ?>
+    </aside>
+  </div>
+</div>
+<?php
     pageEnd(); exit;
 }
-pageStart('Gallery');
-if ($error) echo '<p class="error">' . h($error) . '</p>';
-if ($notice) echo '<p class="notice">' . $notice . '</p>';
-echo '<section class="welcome"><div><p class="eyebrow">Your private album · Signed in as ' . h($currentUser['username']) . '</p><h1>Our moments</h1><p class="subheading">A small collection of moments shared with friends.</p></div><div class="welcome-actions">' . ($currentUser['role'] === 'admin' ? '<a class="quiet-button" href="?action=users">Manage users</a>' : '') . '<span class="private-badge"><span></span>Private</span></div></section>';
-echo '<details class="quick-guide"><summary>How this album works</summary><ol><li><strong>Your gallery is private.</strong> Only signed-in users can browse it.</li><li><strong>Upload images</strong> above and choose how long this copy should be kept.</li><li><strong>Share one image</strong> with its “Generate share link” button. Anyone with that link can view it without signing in. Generating a new link revokes the previous one.</li><li><strong>Search and sort</strong> by filename or upload date. Select several images to copy private links or delete your own uploads. Deleting does not remove downloaded copies or backups.</li></ol></details>';
-echo '<form class="upload" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><div class="upload-copy"><span class="upload-icon" aria-hidden="true">↑</span><div><strong>Add images</strong><small>Drop files here or choose them · JPEG, PNG, GIF, WebP · up to ' . h((string)round($maxBytes / 1024 / 1024)) . ' MB each</small></div></div><label class="retention-control" for="retention"><span>Keep for</span><select id="retention" name="retention"><option value="never">Never delete</option><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select></label><label class="file-control"><span>Choose images</span><input id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label><button class="primary" id="uploadButton">Upload</button><div class="upload-queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div></form>';
-echo '<div class="section-heading"><div><h2>All images</h2><p>' . $totalImageCount . ' ' . ($totalImageCount === 1 ? 'image' : 'images') . '</p></div><form class="gallery-filters" method="get" action="./"><label for="gallerySearch">Search images</label><input id="gallerySearch" type="search" name="q" maxlength="120" value="' . h($searchTerm) . '" placeholder="Filename"><label for="gallerySort">Sort</label><select id="gallerySort" name="sort"><option value="newest"' . ($sortOrder === 'newest' ? ' selected' : '') . '>Newest first</option><option value="oldest"' . ($sortOrder === 'oldest' ? ' selected' : '') . '>Oldest first</option></select><button class="quiet-button">Apply</button></form></div>';
-if ($images) echo '<form class="bulk-toolbar" id="bulkActionsForm" method="post" action="?action=bulk"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_page" value="' . $galleryPage . '"><label class="select-page"><input id="selectVisible" type="checkbox"> Select this page</label><span id="selectedCount" role="status" aria-live="polite">0 selected</span><button class="text-action" type="submit" name="bulk_action" value="copy">Copy selected private links</button><button class="text-action danger" type="submit" name="bulk_action" value="delete" data-confirm="Delete the selected images?">Delete selected</button></form>';
-if (!$images) echo '<div class="empty"><span class="empty-icon">▧</span><h2>' . ($searchTerm === '' ? 'Your album is ready for its first image' : 'No images match your search') . '</h2><p>' . ($searchTerm === '' ? 'Add an image above to get started.' : 'Try another filename or clear the search.') . '</p></div>';
-echo '<div class="grid">';
-foreach ($images as $image) {
+$now = time();
+$photoWord = $totalImageCount === 1 ? 'photo' : 'photos';
+$pageQuery = static fn(int $page): string => '?' . cleanQuery(['q' => $searchTerm, 'sort' => $sortOrder, 'filter' => $filter, 'page' => $page]);
+pageStart('Photos');
+if ($error) echo '<p class="banner error" role="alert">' . h($error) . '</p>';
+if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
+?>
+<div class="title-row">
+  <div><h1>Photos</h1><p class="sub"><?= $totalImageCount ?> <?= $photoWord ?><?= $searchTerm !== '' ? ' matching “' . h($searchTerm) . '”' : '' ?></p></div>
+  <button class="btn primary" type="button" data-add-photos><?= icon('plus') ?>Add photos</button>
+</div>
+<form class="tools" method="get" action="./">
+  <button class="sr" name="filter" value="<?= h($filter) ?>" id="applyFilters" tabindex="-1" aria-hidden="true">Apply</button>
+  <div class="seg" role="group" aria-label="Show">
+    <button name="filter" value="all" aria-pressed="<?= $filter === 'all' ? 'true' : 'false' ?>">Everyone</button>
+    <button name="filter" value="mine" aria-pressed="<?= $filter === 'mine' ? 'true' : 'false' ?>">Mine</button>
+    <button name="filter" value="expiring" aria-pressed="<?= $filter === 'expiring' ? 'true' : 'false' ?>">Expiring soon</button>
+  </div>
+  <label class="search"><span class="sr">Search file names</span><?= icon('search') ?><input type="search" name="q" maxlength="120" value="<?= h($searchTerm) ?>" placeholder="Search file names"></label>
+  <label><span class="sr">Sort</span><select class="field" name="sort" id="gallerySort"><option value="newest"<?= $sortOrder === 'newest' ? ' selected' : '' ?>>Newest first</option><option value="oldest"<?= $sortOrder === 'oldest' ? ' selected' : '' ?>>Oldest first</option></select></label>
+  <noscript><button class="btn sm" name="filter" value="<?= h($filter) ?>">Apply</button></noscript>
+</form>
+<div class="grid" id="grid">
+  <button class="drop" type="button" data-add-photos><?= icon('upload') ?><strong>Add photos</strong><span>or drop them here</span></button>
+<?php foreach ($images as $image):
     $id = (string)$image['id'];
-    $imageUrl = '?action=image&id=' . rawurlencode($id);
-    $detailUrl = '?' . http_build_query(['action' => 'detail', 'id' => $id, 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]);
     $name = (string)$image['original_name'];
-    $created = (int)$image['created_at'];
-    $canManage = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
-    $expiryLabel = $image['expires_at'] === null ? '' : '<small class="expiry-label">Deletes ' . h(date('Y-m-d', (int)$image['expires_at'])) . '</small>';
-    echo '<article class="photo-card"><label class="select-image"><input type="checkbox" form="bulkActionsForm" name="ids[]" value="' . h($id) . '" aria-label="Select image: ' . h($name) . '"></label><a class="photo" href="' . h($detailUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time>' . $expiryLabel . '<small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" data-confirm="' . h('Delete ' . $name . '?') . '"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
-}
-echo '</div>';
-if ($pageCount > 1) {
-    echo '<nav class="pagination" aria-label="Gallery pages">' . ($galleryPage > 1 ? '<a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage - 1])) . '">← Previous</a>' : '') . '<span>Page ' . $galleryPage . ' of ' . $pageCount . '</span>' . ($galleryPage < $pageCount ? '<a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage + 1])) . '">Next →</a>' : '') . '</nav>';
-}
-echo '<div class="toast" id="toast" role="status" aria-live="polite"></div>';
+    $imageUrl = '?action=image&id=' . rawurlencode($id);
+    $detailUrl = '?' . cleanQuery(['action' => 'detail', 'id' => $id, 'q' => $searchTerm, 'sort' => $sortOrder, 'filter' => $filter, 'page' => $galleryPage]);
+    $expiry = expiryInfo($image, $now);
+    $caption = (string)$image['display_name'] . ', ' . date('Y-m-d', (int)$image['created_at']) . ($expiry !== null ? ', ' . $expiry['label'] : ''); ?>
+  <article class="tile">
+    <a class="tile-link" href="<?= h($detailUrl) ?>" aria-label="<?= h($name . ', added by ' . (string)$image['display_name']) ?>"><img loading="lazy" decoding="async" src="<?= h($imageUrl) ?>" alt=""></a>
+    <label class="pick"><input type="checkbox" form="bulkActionsForm" name="ids[]" value="<?= h($id) ?>" aria-label="Select <?= h($name) ?>"><span class="circle"><?= icon('check') ?></span></label>
+    <?= avatar((string)$image['owner_id'], (string)$image['display_name'], 'av by') ?>
+    <?php if ($expiry !== null && $expiry['soon']): ?><span class="badge"><?= h($expiry['label']) ?></span><?php endif; ?>
+    <?php if ($expiry !== null): ?><span class="life<?= $expiry['soon'] ? ' soon' : '' ?>" aria-hidden="true"><i style="width:<?= (int)round($expiry['fraction'] * 100) ?>%"></i></span><?php endif; ?>
+    <span class="cap"><b><?= h($name) ?></b><?= h($caption) ?></span>
+  </article>
+<?php endforeach; ?>
+</div>
+<?php if (!$images): ?>
+<div class="empty"><h2><?= $searchTerm !== '' || $filter !== 'all' ? 'No photos match' : 'No photos yet' ?></h2><p><?= $searchTerm !== '' || $filter !== 'all' ? 'Try another search or filter.' : 'Add the first photos to get started.' ?></p></div>
+<?php endif; ?>
+<?php if ($pageCount > 1): ?>
+<nav class="pager" aria-label="Gallery pages">
+  <?php if ($galleryPage > 1): ?><a class="btn sm" href="<?= h($pageQuery($galleryPage - 1)) ?>">Previous</a><?php endif; ?>
+  <span>Page <?= $galleryPage ?> of <?= $pageCount ?></span>
+  <?php if ($galleryPage < $pageCount): ?><a class="btn sm" href="<?= h($pageQuery($galleryPage + 1)) ?>">Next</a><?php endif; ?>
+</nav>
+<?php endif; ?>
+<?php if ($images): ?>
+<form class="selbar" id="bulkActionsForm" method="post" action="?action=bulk">
+  <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="return_q" value="<?= h($searchTerm) ?>"><input type="hidden" name="return_sort" value="<?= h($sortOrder) ?>"><input type="hidden" name="return_filter" value="<?= h($filter) ?>"><input type="hidden" name="return_page" value="<?= $galleryPage ?>">
+  <b id="selectedCount" role="status" aria-live="polite">0 selected</b>
+  <button type="button" class="btn sm" id="selectVisible">Select page</button>
+  <button class="btn sm" name="bulk_action" value="copy"><?= icon('copy') ?>Copy links</button>
+  <button class="btn sm" name="bulk_action" value="delete"><?= icon('trash') ?>Delete</button>
+  <button type="button" class="icon-btn" id="clearSel" aria-label="Clear selection"><?= icon('close') ?></button>
+</form>
+<?php endif; ?>
+<dialog class="modal" id="uploadDialog" aria-labelledby="uploadTitle">
+  <form class="sheet-in" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+    <h2 id="uploadTitle">Add photos</h2>
+    <p class="sub">JPEG, PNG, GIF or WebP, up to <?= h((string)round($maxBytes / 1024 / 1024)) ?> MiB each.</p>
+    <label class="zone"><?= icon('upload') ?><strong>Drop photos here</strong><span>or choose from your device</span><input class="sr" id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label>
+    <div class="queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div>
+    <fieldset class="keep">
+      <legend>Keep these photos</legend>
+      <div class="seg">
+        <label><input type="radio" name="retention" value="never" checked><span>Forever</span></label>
+        <label><input type="radio" name="retention" value="1"><span>1 day</span></label>
+        <label><input type="radio" name="retention" value="7"><span>7 days</span></label>
+        <label><input type="radio" name="retention" value="30"><span>30 days</span></label>
+      </div>
+      <p class="hint" id="retentionHint"></p>
+    </fieldset>
+    <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" id="uploadButton" disabled>Upload</button></div>
+  </form>
+</dialog>
+<?php
 pageEnd();
 
-function pageStart(string $title): void {
-    $topAccountControl = '';
-    if (isset($GLOBALS['currentUser']) && is_array($GLOBALS['currentUser'])) {
-        $topAccountControl = '<form class="top-logout" method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button class="quiet-button">Sign out</button></form>';
-    }
-    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>' . h($title) . ' · phpSimpleImageSharing</title><style>
-    :root{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:light dark;--page:#f4f1eb;--surface:#fffefa;--raised:#fff;--ink:#33312d;--muted:#6f695f;--line:#e9e3d9;--quiet:#f7f4ee;--accent:#9b5b44;--accent-hover:#814832;--accent-ink:#fff;--tint:#f7eee8;--danger:#a9473c;--success:#426b4b;--focus:#b76f4d;--shadow:0 12px 34px rgba(57,43,31,.07);--radius:12px}
-    html[data-theme="dark"]{color-scheme:dark;--page:#1b1a18;--surface:#242321;--raised:#2b2926;--ink:#f1ede6;--muted:#b3aa9e;--line:#403d38;--quiet:#302e2b;--accent:#cf9275;--accent-hover:#e4a487;--accent-ink:#251913;--tint:#382c26;--danger:#ed9588;--success:#80b78a;--focus:#e3a184;--shadow:0 14px 36px rgba(0,0,0,.2)}
-    @media(prefers-color-scheme:dark){html:not([data-theme="light"]){color-scheme:dark;--page:#1b1a18;--surface:#242321;--raised:#2b2926;--ink:#f1ede6;--muted:#b3aa9e;--line:#403d38;--quiet:#302e2b;--accent:#cf9275;--accent-hover:#e4a487;--accent-ink:#251913;--tint:#382c26;--danger:#ed9588;--success:#80b78a;--focus:#e3a184;--shadow:0 14px 36px rgba(0,0,0,.2)}}
-    *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);transition:background .2s,color .2s}.app-shell{max-width:1120px;margin:0 auto;padding:0 28px 48px}.topbar{height:76px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);margin-bottom:42px}.brand{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--ink);font-weight:760;letter-spacing:-.055em;font-size:16px}.brand-mark{width:28px;height:28px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-size:14px;flex:none}.top-actions{display:flex;align-items:center;gap:10px}.top-logout{margin:0}.theme-toggle,.quiet-button{font:inherit;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);padding:8px 11px;cursor:pointer;font-size:13px}.theme-toggle:hover,.quiet-button:hover{background:var(--quiet)}
-    button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}.file-control:focus-within span{outline:3px solid var(--focus);outline-offset:2px}.welcome{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:25px}.eyebrow{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:750;margin:0 0 7px}.welcome h1{font:500 clamp(31px,4vw,43px)/1.1 Georgia,serif;letter-spacing:-.04em;margin:0}.subheading{color:var(--muted);margin:8px 0 0;font-size:14px}.private-badge{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:99px;background:var(--surface);padding:7px 11px;color:var(--muted);font-size:12px;white-space:nowrap}.private-badge span{width:7px;height:7px;border-radius:50%;background:#6d9878}
-    .upload{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:var(--radius);padding:15px;background:var(--surface);margin:0 0 34px;box-shadow:var(--shadow)}.upload-copy{display:flex;align-items:center;gap:11px;margin-right:auto}.upload-icon{width:36px;height:36px;border-radius:10px;background:var(--tint);color:var(--accent);display:grid;place-items:center;font-size:21px}.upload-copy strong{display:block;font-size:13px}.upload-copy small{display:block;color:var(--muted);font-size:11px;margin-top:2px}.file-control{position:relative;overflow:hidden}.file-control span{display:block;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-size:12px;padding:9px 11px;cursor:pointer}.file-control input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.primary{font:inherit;border:0;border-radius:8px;background:var(--accent);color:var(--accent-ink);font-size:12px;font-weight:700;padding:10px 14px;cursor:pointer}.primary:hover{background:var(--accent-hover)}
-    .section-heading{display:flex;align-items:end;justify-content:space-between;margin:0 0 13px}.section-heading h2{font-size:16px;margin:0;letter-spacing:-.02em}.section-heading p{font-size:11px;color:var(--muted);margin:2px 0 0}.sort-label{font-size:11px;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:17px}.photo-card{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;transition:transform .16s,box-shadow .16s}.photo-card:hover{transform:translateY(-2px);box-shadow:var(--shadow)}.photo{display:block;aspect-ratio:4/3;background:var(--quiet);overflow:hidden}.photo img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}.photo-card:hover img{transform:scale(1.025)}.photo-info{padding:11px 12px 10px}.photo-info>strong{display:block;font-size:12px;font-weight:680;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.photo-info time{display:block;color:var(--muted);font-size:10px;margin-top:2px}.photo-actions{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);margin-top:9px;padding-top:7px}.photo-actions form{margin:0}
-    .text-action,.inline-action{border:0;background:none;color:var(--accent);font:inherit;font-size:11px;padding:2px 0;cursor:pointer;text-decoration:none}.text-action:hover,.inline-action:hover{text-decoration:underline}.danger{color:var(--danger)}.error,.notice{padding:12px 14px;border:1px solid var(--line);border-radius:9px;font-size:13px;margin:0 0 15px}.error{color:var(--danger);background:color-mix(in srgb,var(--danger) 7%,var(--surface))}.notice{background:var(--tint);color:var(--ink)}.notice a{color:var(--accent);font-weight:650}.notice .inline-action{margin-left:10px}.empty{padding:48px 20px;text-align:center;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.empty-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:var(--tint);color:var(--accent);font-size:21px;margin:0 auto 12px}.empty h2{font:500 20px Georgia,serif;margin:0 0 6px}.empty p{color:var(--muted);font-size:13px;margin:0}.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:9px;font-size:12px;transition:opacity .18s,transform .18s}.toast.show{opacity:1;transform:translate(-50%,0)}a{color:var(--accent)}
-    @media(max-width:600px){.app-shell{padding:0 15px 32px}.topbar{height:auto;min-height:64px;flex-wrap:wrap;gap:8px;margin-bottom:29px;padding:8px 0}.top-actions{gap:6px;margin-left:auto}.welcome{align-items:flex-start}.welcome h1{font-size:33px}.upload{align-items:stretch;flex-wrap:wrap;padding:12px;gap:9px}.upload-copy{width:100%;margin:0 0 4px}.file-control{flex:1}.file-control span,.primary{height:38px;display:grid;place-items:center}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.photo-info{padding:9px}.photo-actions{gap:8px}.top-actions .quiet-button,.theme-toggle{padding:7px 8px;font-size:11px}}@media(max-width:380px){.grid{grid-template-columns:1fr}.photo{aspect-ratio:16/10}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
-    </style><body><div class="app-shell"><header class="topbar"><a class="brand" href="./"><span class="brand-mark">P</span>phpSimpleImageSharing</a><div class="top-actions">' . $topAccountControl . '<button class="theme-toggle" id="themeToggle" type="button">Theme: System</button></div></header><main>';
-    echo '<style>.login-panel{max-width:460px;margin:0 auto;padding:28px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.login-panel h1{font:500 32px/1.2 Georgia,serif;letter-spacing:-.04em;margin:0}.login-panel .subheading{margin-bottom:24px}.login-form{display:grid;gap:9px}.login-form label,.user-create label,.password-reset{font-size:12px;font-weight:650}.login-form input,.user-create input,.user-create select,.password-reset input{font:inherit;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.login-form .primary{margin-top:5px}.welcome-actions{display:flex;align-items:center;gap:9px}.admin-panel{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.admin-panel h2{font-size:15px;margin:0}.admin-panel>p{color:var(--muted);font-size:12px;margin:3px 0 16px}.user-create{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;align-items:end}.user-create label,.password-reset{display:grid;gap:5px}.user-create .primary{height:39px}.user-list{display:grid;gap:9px}.user-card{display:flex;align-items:center;gap:15px;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.user-card>div:first-child{flex:1;min-width:140px}.user-card strong,.user-card small{display:block}.user-card strong{font-size:13px}.user-card small{color:var(--muted);font-size:11px}.user-actions{display:flex;align-items:end;gap:8px;margin:0}.password-reset input{width:145px;padding:7px}.photo-info .owner-label{display:block;color:var(--muted);font-size:10px;margin-top:3px}.share-url{font-size:12px;padding:2px 6px;background:var(--quiet);border-radius:5px;color:var(--ink)}@media(max-width:750px){.user-create{grid-template-columns:repeat(2,minmax(0,1fr))}.user-card{flex-wrap:wrap}.user-card>div:first-child{flex-basis:100%}.password-reset input{width:130px}}@media(max-width:600px){.login-panel{padding:20px}.brand{font-size:12px;letter-spacing:-.07em}.brand-mark{width:25px;height:25px}.welcome-actions{align-items:flex-end;flex-direction:column}.user-create{grid-template-columns:1fr}.user-card{align-items:flex-start}.user-actions{flex-wrap:wrap}}</style>';
-    echo '<style>.upload{flex-wrap:wrap}.retention-control{min-width:120px}.expiry-label{display:block;color:var(--muted);font-size:10px;margin-top:2px}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:var(--success)}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.retention-control{flex:1;min-width:130px}.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
-    echo '<style>.gallery-filters{display:flex;align-items:center;gap:7px}.gallery-filters label{font-size:11px;color:var(--muted)}.gallery-filters input,.gallery-filters select{font:inherit;font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px}.gallery-filters input{width:170px}.detail-heading,.detail-nav,.detail-actions{display:flex;align-items:center;gap:9px}.detail-heading{justify-content:space-between;margin-bottom:15px}.detail-nav{font-size:12px;color:var(--muted)}.quiet-button.disabled{opacity:.45}.detail-card{overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.detail-image{display:block;width:100%;max-height:75vh;object-fit:contain;background:var(--quiet)}.detail-info{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px}.detail-info h1{font:500 21px/1.2 Georgia,serif;overflow-wrap:anywhere;margin:0}.detail-info p{font-size:12px;color:var(--muted);margin:5px 0 0}.detail-actions{flex-wrap:wrap}.pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:22px;font-size:12px;color:var(--muted)}@media(max-width:650px){.section-heading{align-items:flex-start;flex-direction:column;gap:10px}.gallery-filters{width:100%;flex-wrap:wrap}.gallery-filters input{flex:1;min-width:90px}.gallery-filters label:first-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.detail-heading{align-items:flex-start;flex-direction:column}.detail-nav{width:100%;justify-content:space-between}.detail-info{align-items:flex-start;flex-direction:column}.detail-actions{width:100%}}</style>';
-    echo '<style>.bulk-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 11px;margin:0 0 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.bulk-toolbar>span{font-size:11px;color:var(--muted);margin-right:auto}.select-page{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}.photo-card{position:relative}.select-image{position:absolute;z-index:2;top:9px;left:9px;display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--surface);box-shadow:var(--shadow);cursor:pointer}.select-image input,.select-page input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}@media(max-width:600px){.bulk-toolbar{gap:7px}.bulk-toolbar>span{margin-right:0}.bulk-toolbar .text-action{font-size:10px}}</style>';
-    echo '<style>.system-checks{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px}.system-checks li{display:flex;align-items:flex-start;gap:9px;min-width:0}.system-checks li>div{min-width:0}.system-checks strong,.system-checks small{display:block}.system-checks strong{font-size:12px}.system-checks small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.check-status{font-weight:700;color:var(--ink)}.check-mark{width:19px;height:19px;flex:none;display:grid;place-items:center;border-radius:50%;font-size:12px;font-weight:800}.check-mark.ok{background:color-mix(in srgb,var(--success) 15%,var(--surface));color:var(--success)}.check-mark.issue{background:color-mix(in srgb,var(--danger) 15%,var(--surface));color:var(--danger)}.storage-usage{border-top:1px solid var(--line);padding-top:11px;margin-top:15px!important;color:var(--ink)!important}@media(max-width:600px){.system-checks{grid-template-columns:1fr}}</style>';
-    echo '<style>.quick-guide{margin:-13px 0 24px;color:var(--muted);font-size:12px}.quick-guide summary{display:inline-flex;cursor:pointer;color:var(--accent);font-weight:650;padding:3px 0}.quick-guide summary:hover{text-decoration:underline}.quick-guide[open]{padding:12px 15px;border:1px solid var(--line);border-radius:9px;background:var(--surface);margin-top:-5px}.quick-guide ol{display:grid;gap:7px;margin:8px 0 0;padding-left:20px}.quick-guide li strong{color:var(--ink)}</style>';
+/** Inline icons (Lucide-style strokes). All markup here is static. */
+function icon(string $name): string {
+    static $paths = [
+        'plus' => '<path d="M12 5v14M5 12h14"/>',
+        'search' => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+        'check' => '<path d="m5 12 5 5 9-10"/>',
+        'upload' => '<path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4"/>',
+        'download' => '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+        'link' => '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+        'copy' => '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/>',
+        'trash' => '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+        'back' => '<path d="M15 5l-7 7 7 7"/>',
+        'next' => '<path d="M9 5l7 7-7 7"/>',
+        'close' => '<path d="M6 6l12 12M18 6 6 18"/>',
+        'chevron' => '<path d="m6 9 6 6 6-6"/>',
+        'users' => '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.7c2 .6 3.3 2.3 3.5 5.3"/>',
+        'help' => '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"/>',
+        'logout' => '<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>',
+        'sun' => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+        'moon' => '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/>',
+        'auto' => '<circle cx="12" cy="12" r="9"/><path d="M12 3v18"/><path d="M12 3a9 9 0 0 1 0 18" fill="currentColor" stroke="none"/>',
+    ];
+    return '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' . ($paths[$name] ?? '') . '</svg>';
 }
+
+function brandMark(string $class = 'mark'): string {
+    return '<svg class="' . h($class) . '" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9"/><path d="M12 24V8h6a5 5 0 0 1 0 10h-6"/></svg>';
+}
+
+function avatarInitials(string $name): string {
+    preg_match_all('/[\p{L}\p{N}]+/u', $name, $matches);
+    $words = $matches[0] ?? [];
+    if ($words === []) return '?';
+    if (count($words) === 1) preg_match('/^.{1,2}/us', $words[0], $part);
+    else { preg_match('/^./us', $words[0], $first); preg_match('/^./us', $words[1], $second); $part = [($first[0] ?? '') . ($second[0] ?? '')]; }
+    $initials = (string)($part[0] ?? '?');
+    return function_exists('mb_strtoupper') ? mb_strtoupper($initials, 'UTF-8') : strtoupper($initials);
+}
+
+function avatar(string $userId, string $displayName, string $class = 'av'): string {
+    $hue = crc32($userId) % 360;
+    return '<span class="' . h($class) . '" style="background:hsl(' . $hue . ' 42% 40%)" title="' . h($displayName) . '" aria-hidden="true">' . h(avatarInitials($displayName)) . '</span>';
+}
+
+/** Remaining lifetime of a photo, or null if it is kept forever. */
+function expiryInfo(array $image, int $now): ?array {
+    if ($image['expires_at'] === null) return null;
+    $expires = (int)$image['expires_at'];
+    $remaining = max(0, $expires - $now);
+    $total = max(1, $expires - (int)$image['created_at']);
+    if ($remaining >= 2 * 86400) $label = intdiv($remaining, 86400) . ' days left';
+    elseif ($remaining >= 3600) { $hours = intdiv($remaining, 3600); $label = $hours . ($hours === 1 ? ' hour left' : ' hours left'); }
+    else $label = 'Under 1 hour left';
+    return ['fraction' => min(1.0, $remaining / $total), 'label' => $label, 'soon' => $remaining < 86400, 'date' => date('Y-m-d', $expires)];
+}
+
+/** Build a short query string without default values. */
+function cleanQuery(array $params): string {
+    foreach ($params as $key => $value) {
+        if ($value === '' || $value === null || ($key === 'sort' && $value === 'newest') || ($key === 'filter' && $value === 'all') || ($key === 'page' && (int)$value === 1)) unset($params[$key]);
+    }
+    return http_build_query($params);
+}
+
+function pageStart(string $title, string $variant = 'app'): void {
+    $user = isset($GLOBALS['currentUser']) && is_array($GLOBALS['currentUser']) ? $GLOBALS['currentUser'] : null;
+    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>' . h($title) . ' · phpSimpleImageSharing</title>';
+    echo '<script>(()=>{const r=document.documentElement;r.classList.add("js");let t="system";try{const s=localStorage.getItem("phpSimpleImageSharing-theme");if(s==="light"||s==="dark")t=s}catch{}if(t!=="system")r.dataset.theme=t;r.dataset.mode=t})()</script><style>';
+    echo <<<'CSS'
+:root{--bg:#f4f5f7;--surface:#fff;--raised:#fff;--ink:#14171f;--muted:#667085;--line:#e3e5ea;--quiet:#eceef2;--accent:#3b4bff;--accent-ink:#fff;--tint:#e9ebff;--warn:#b86a00;--warn-bg:#fff1dc;--danger:#c4261d;--ok:#18794e;--r-ctl:10px;--font:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark;--bg:#0f1115;--surface:#171a20;--raised:#1d2129;--ink:#eceef3;--muted:#98a0b0;--line:#2a2f39;--quiet:#222731;--accent:#8590ff;--accent-ink:#0d1030;--tint:#262b52;--warn:#f0b35a;--warn-bg:#3a2d17;--danger:#ff7a70;--ok:#5fd29a}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]):not([data-theme=dark]){color-scheme:dark;--bg:#0f1115;--surface:#171a20;--raised:#1d2129;--ink:#eceef3;--muted:#98a0b0;--line:#2a2f39;--quiet:#222731;--accent:#8590ff;--accent-ink:#0d1030;--tint:#262b52;--warn:#f0b35a;--warn-bg:#3a2d17;--danger:#ff7a70;--ok:#5fd29a}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);min-height:100vh}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.mark{width:28px;height:28px;flex:none}.mark rect{fill:var(--accent)}.mark path{fill:none;stroke:var(--accent-ink);stroke-width:3.4;stroke-linecap:round;stroke-linejoin:round}
+
+.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;height:56px;padding:0 16px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;letter-spacing:-.02em;text-decoration:none;color:inherit}
+.bar .sp{flex:1}
+.icon-btn{display:inline-grid;place-items:center;width:38px;height:38px;border:0;border-radius:999px;background:transparent;color:inherit;text-decoration:none}
+.icon-btn:hover{background:var(--quiet)}
+#themeToggle .ti{display:none}
+:root[data-mode=system] #themeToggle .ti-system,:root[data-mode=light] #themeToggle .ti-light,:root[data-mode=dark] #themeToggle .ti-dark{display:block}
+.acct{position:relative}
+.acct summary{list-style:none;display:flex;align-items:center;gap:8px;padding:4px 6px 4px 4px;border-radius:999px;cursor:pointer}
+.acct summary::-webkit-details-marker{display:none}
+.acct summary:hover,.acct[open] summary{background:var(--quiet)}
+.av{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;flex:none;line-height:1}
+.menu{position:absolute;right:0;top:46px;min-width:220px;background:var(--raised);border:1px solid var(--line);border-radius:14px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.16)}
+.menu .who{padding:8px 10px 6px;color:var(--muted);font-size:13px}.menu .who strong{display:block;color:var(--ink);font-size:14px}
+.menu a,.menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:9px;background:transparent;text-align:left;text-decoration:none;color:inherit}
+.menu a:hover,.menu button:hover{background:var(--quiet)}
+.menu hr{border:0;border-top:1px solid var(--line);margin:6px 0}
+.menu form{margin:0}
+
+.page{max-width:1180px;margin:0 auto;padding:22px 16px 110px}
+.title-row{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:28px;line-height:1.1;letter-spacing:-.03em;margin:0}
+h2{margin:0}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--surface);font-weight:600;text-decoration:none;color:var(--ink);list-style:none}
+.btn::-webkit-details-marker{display:none}
+.btn:hover{background:var(--quiet)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger)}
+.btn.danger-solid{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent}.btn.ghost:hover{background:var(--quiet)}
+.btn.sm{min-height:34px;padding:0 12px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.banner{padding:12px 14px;border-radius:12px;margin:0 0 16px;font-size:14px;background:var(--tint)}
+.banner.error{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface))}
+
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--quiet);position:relative}
+.seg button,.seg label{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted);position:relative;cursor:pointer}
+.seg button[aria-pressed=true],.seg input:checked+span{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.seg label{padding:0}.seg label span{display:block;padding:6px 14px;border-radius:999px}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg label:focus-within span{outline:2px solid var(--accent);outline-offset:2px}
+.search{position:relative;flex:1;min-width:150px;max-width:340px}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.search input{width:100%;height:40px;padding:0 12px 0 38px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+.field{height:40px;padding:0 12px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--surface)}
+.js .nojs{display:none}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.tile{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--quiet)}
+.tile-link{position:absolute;inset:0;display:block}
+.tile img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .14s}
+.tile.sel img{transform:scale(.88);border-radius:8px}.tile.sel{background:var(--tint)}
+.cap{position:absolute;inset:auto 0 0 0;padding:28px 10px 16px;color:#fff;font-size:12px;line-height:1.3;background:linear-gradient(transparent,rgba(0,0,0,.62));opacity:0;transition:opacity .15s;pointer-events:none}
+.cap b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile:hover .cap,.tile:focus-within .cap{opacity:1}
+.tile .by{position:absolute;left:8px;bottom:18px;width:22px;height:22px;font-size:9px;border:2px solid rgba(255,255,255,.92);pointer-events:none}
+.tile:hover .by{opacity:0}
+.life{position:absolute;left:8px;right:8px;bottom:7px;height:5px;border-radius:9px;background:rgba(0,0,0,.45);box-shadow:0 0 0 1px rgba(255,255,255,.18);pointer-events:none}
+.life i{display:block;height:100%;border-radius:9px;background:#fff}
+.life.soon i{background:#ffb347}
+.badge{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:700;pointer-events:none}
+.pick{position:absolute;top:8px;left:8px;width:28px;height:28px;z-index:2}
+.pick input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.pick .circle{position:absolute;inset:0;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.3);display:grid;place-items:center;color:transparent;opacity:0;transition:opacity .12s;pointer-events:none}
+.pick .circle svg{width:14px;height:14px;stroke-width:3}
+.tile:hover .circle,.tile:focus-within .circle,.grid.selecting .circle{opacity:1}
+.pick input:checked+.circle{opacity:1;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pick input:focus-visible+.circle{outline:2px solid var(--accent);outline-offset:2px}
+@media(hover:none){.pick .circle{opacity:1}.drop span{display:none}}
+.drop{display:grid;place-content:center;gap:6px;text-align:center;aspect-ratio:1;border-radius:10px;border:2px dashed var(--line);background:transparent;color:var(--muted);padding:10px}
+.drop:hover{border-color:var(--accent);color:var(--accent);background:var(--tint)}
+.drop strong{color:var(--ink);font-size:14px}.drop svg{margin:0 auto;width:26px;height:26px}
+.empty{padding:34px 8px;text-align:center;color:var(--muted)}.empty h2{font-size:18px;color:var(--ink);margin-bottom:4px}
+.pager{display:flex;justify-content:center;align-items:center;gap:14px;margin:22px 0;color:var(--muted);font-size:14px}
+.dragging body::after,.dragging::after{content:"Drop photos to add them";position:fixed;inset:10px;z-index:200;border:3px dashed var(--accent);border-radius:20px;background:color-mix(in srgb,var(--accent) 12%,transparent);display:grid;place-items:center;font-weight:700;font-size:20px;color:var(--accent);pointer-events:none}
+
+.selbar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,0);display:flex;align-items:center;gap:4px;padding:8px 8px 8px 16px;border-radius:999px;background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.28);z-index:30;white-space:nowrap;max-width:calc(100% - 16px);margin:0;transition:opacity .15s,transform .15s}
+.js .selbar:not(.on){opacity:0;pointer-events:none;transform:translate(-50%,20px)}
+.selbar b{margin-right:6px;font-size:14px}
+.selbar .btn{background:transparent;border-color:transparent;color:inherit;min-height:36px;padding:0 10px}
+.selbar .btn:hover{background:rgba(127,127,127,.28)}
+.selbar .icon-btn{width:36px;height:36px}
+
+dialog.modal{border:0;padding:0;border-radius:20px;background:var(--surface);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100vh - 24px);box-shadow:0 24px 60px rgba(0,0,0,.35)}
+dialog.modal::backdrop{background:rgba(8,10,14,.55)}
+@media(max-width:640px){dialog.modal{margin:auto auto 0;border-radius:20px 20px 0 0;width:100%;max-width:none}}
+.sheet-in{padding:22px 20px 20px}
+.sheet-in h2{font-size:20px;letter-spacing:-.02em;margin-bottom:4px}
+.foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.foot form{display:contents}
+.zone{display:grid;place-items:center;gap:4px;margin:14px 0;padding:20px;border:2px dashed var(--line);border-radius:14px;text-align:center;color:var(--muted);cursor:pointer}
+.zone:hover{border-color:var(--accent);background:var(--tint)}.zone strong{color:var(--ink)}.zone svg{width:26px;height:26px}
+.queue{margin:6px 0}.queue-summary{font-size:13px;color:var(--muted);margin-bottom:6px}
+.queue-items{display:grid;gap:6px;max-height:34vh;overflow:auto}
+.qi{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:center;padding:6px;border-radius:12px;background:var(--bg)}
+.qi img{width:40px;height:40px;object-fit:cover;border-radius:8px;background:var(--quiet)}
+.qn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qs{font-size:12px;color:var(--muted)}.qs.ok{color:var(--ok)}.qs.fail{color:var(--danger)}
+.qt{height:4px;border-radius:9px;background:var(--line);margin-top:5px;overflow:hidden}.qt i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
+fieldset.keep{border:0;padding:0;margin:16px 0 0}
+fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
+.guide{display:grid;gap:10px;margin:14px 0 0;padding-left:20px;font-size:14px}.guide strong{display:block}.guide span{color:var(--muted)}
+
+.toast{position:fixed;left:50%;bottom:76px;transform:translate(-50%,20px);padding:10px 16px;border-radius:999px;background:var(--ink);color:var(--bg);opacity:0;transition:.18s;z-index:300;pointer-events:none;font-weight:600;font-size:14px;max-width:calc(100% - 24px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+.cols{display:grid;gap:28px;grid-template-columns:1fr}
+@media(min-width:900px){.cols{grid-template-columns:1fr 340px}}
+.list{border-top:1px solid var(--line)}
+.person{display:flex;align-items:center;gap:12px;padding:14px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.person .av{width:38px;height:38px;font-size:13px}
+.person .n{flex:1;min-width:150px}.person .n b{display:block}.person .n span{color:var(--muted);font-size:13px}
+.person form{margin:0}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--quiet);font-size:12px;font-weight:600;color:var(--muted)}
+.pill.admin{background:var(--tint);color:var(--accent)}.pill.off{background:var(--warn-bg);color:var(--warn)}
+.reset[open]{flex-basis:100%}
+.reset-form{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.reset-form input,.form-grid input,.form-grid select{height:40px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--surface);padding:0 12px}
+.reset-form input{flex:1;min-width:180px}
+.add-person{margin-bottom:18px}.add-person summary{display:inline-flex;cursor:pointer}
+.add-person form{margin-top:14px}
+.form-grid{display:grid;gap:10px;grid-template-columns:1fr;margin:0 0 4px}
+@media(min-width:600px){.form-grid{grid-template-columns:1fr 1fr}}
+.form-grid label{display:grid;gap:5px;font-size:13px;font-weight:600}.form-grid input,.form-grid select{font-weight:400}
+.side{padding:18px;border-radius:16px;background:var(--surface);border:1px solid var(--line);align-self:start}
+.side h2{font-size:16px;margin-bottom:12px}
+.chk-l{list-style:none;margin:0;padding:0;display:grid;gap:12px;font-size:14px}
+.chk-l li{display:flex;gap:10px;align-items:flex-start}
+.chk-l .d{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:12px;font-weight:800}
+.chk-l .d.ok{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--ok)}
+.chk-l .d.bad{background:color-mix(in srgb,var(--danger) 18%,var(--surface));color:var(--danger)}
+.chk-l small{display:block;color:var(--muted);overflow-wrap:anywhere}
+
+.login{min-height:calc(100vh - 220px);display:grid;place-items:center}
+.login-form{width:min(400px,100%);display:grid;gap:12px}
+.login-form h1{font-size:34px}
+.login-form label{display:grid;gap:6px;font-weight:600;font-size:14px}
+.login-form input{height:46px;border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-weight:400}
+.login-form .btn{min-height:46px}
+
+body.viewer-page{background:#0c0e12;color:#eceef3}
+.viewer-page :focus-visible{outline-color:#8590ff}
+.vwrap{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
+.vtop{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.vtop .icon-btn{color:#fff}.vtop .icon-btn:hover{background:rgba(255,255,255,.12)}
+.vtop .t{flex:1;min-width:0}.vtop .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtop .t span{font-size:13px;color:#98a0b0}
+.vbody{display:grid;grid-template-columns:1fr;min-height:0}
+@media(min-width:900px){.vbody{grid-template-columns:1fr 340px}}
+.stage{position:relative;display:grid;place-items:center;min-height:0;padding:0 12px 12px}
+.stage img{max-width:100%;max-height:calc(100vh - 90px);border-radius:12px;display:block;object-fit:contain}
+.nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;text-decoration:none}
+.nav:hover{background:rgba(255,255,255,.26)}.nav.l{left:22px}.nav.r{right:22px}
+.panel{padding:6px 18px 32px}
+.panel dl{margin:0 0 18px;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.panel dt{color:#98a0b0}.panel dd{margin:0}
+.panel .btn{background:#1d2129;border-color:#2a2f39;color:#eceef3;width:100%;margin-bottom:8px}
+.panel .btn:hover{background:#262b36}
+.panel .btn.primary{background:#8590ff;border-color:#8590ff;color:#0d1030}
+.panel .btn.danger{color:#ff7a70}
+.panel .banner{background:#1d2129;color:#eceef3}.panel .banner.error{color:#ff7a70}
+.panel .hint{color:#98a0b0;margin:0 0 16px}
+.share-result{margin:0 0 14px;padding:12px;border-radius:14px;background:#1d2129;border:1px solid #2a2f39}
+.share-result label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
+.share-result .link{display:flex;gap:8px}
+.share-result input{flex:1;min-width:0;height:38px;border-radius:9px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px}
+.share-result .btn{width:auto;margin:0}
+.panel form{margin:0}
+
+@media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,1fr);gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+CSS;
+    echo '</style><body class="' . ($variant === 'viewer' ? 'viewer-page' : '') . '">';
+    if ($variant !== 'viewer') {
+        echo '<header class="bar"><a class="brand" href="./">' . brandMark() . '<span class="full">phpSimpleImageSharing</span></a><span class="sp"></span>';
+        echo '<button class="icon-btn" id="themeToggle" type="button" aria-label="Change theme"><span class="ti ti-system">' . icon('auto') . '</span><span class="ti ti-light">' . icon('sun') . '</span><span class="ti ti-dark">' . icon('moon') . '</span></button>';
+        if ($user !== null) {
+            echo '<details class="acct"><summary aria-label="Account menu">' . avatar((string)$user['id'], (string)$user['display_name']) . '<span class="nm">' . h((string)$user['display_name']) . '</span>' . icon('chevron') . '</summary><div class="menu">';
+            echo '<div class="who"><strong>' . h((string)$user['display_name']) . '</strong>' . ($user['role'] === 'admin' ? 'Administrator' : 'Member') . '</div>';
+            if ($user['role'] === 'admin') echo '<a href="?action=users">' . icon('users') . 'People and system</a>';
+            echo '<button type="button" data-open-dialog="guideDialog">' . icon('help') . 'Quick guide</button><hr>';
+            echo '<form method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button>' . icon('logout') . 'Sign out</button></form></div></details>';
+        }
+        echo '</header>';
+    }
+    echo '<main class="' . ($variant === 'viewer' ? 'viewer-main' : 'page') . '">';
+}
+
 function pageEnd(): void {
-    echo '</main></div><script>';
+    $signedIn = isset($GLOBALS['currentUser']) && is_array($GLOBALS['currentUser']);
+    echo '</main><div class="toast" id="toast" role="status" aria-live="polite"></div>';
+    if ($signedIn) {
+        echo '<dialog class="modal" id="confirmDialog" aria-labelledby="confirmTitle"><div class="sheet-in"><h2 id="confirmTitle"></h2><p class="sub" id="confirmText"></p><form method="dialog" class="foot"><button class="btn ghost" value="no">Cancel</button><button class="btn danger-solid" value="yes" id="confirmYes">Delete</button></form></div></dialog>';
+        echo '<dialog class="modal" id="guideDialog" aria-labelledby="guideTitle"><div class="sheet-in"><h2 id="guideTitle">Quick guide</h2><ol class="guide">';
+        echo '<li><strong>Only signed-in people can see the gallery.</strong><span>Everyone you add sees all photos.</span></li>';
+        echo '<li><strong>Add photos</strong><span>Use the button at the top or drop files anywhere on the page. Choose how long to keep them.</span></li>';
+        echo '<li><strong>Share one photo</strong><span>Open a photo and create a share link. Anyone with the link can see that photo without signing in. A new link replaces the old one.</span></li>';
+        echo '<li><strong>Select several photos</strong><span>Use the circle in a photo’s corner to copy links or delete your own photos.</span></li>';
+        echo '<li><strong>The bar on each photo shows how long it stays.</strong><span>Deleting here does not remove copies others saved or backups.</span></li>';
+        echo '</ol><form method="dialog" class="foot"><button class="btn primary">Got it</button></form></div></dialog>';
+    }
+    echo '<script>';
     echo <<<'JS'
 (()=>{
-  const root=document.documentElement,themeButton=document.getElementById('themeToggle'),themeKey='phpSimpleImageSharing-theme';
-  let savedTheme='system';try{savedTheme=localStorage.getItem(themeKey)||'system'}catch{}let theme=['system','light','dark'].includes(savedTheme)?savedTheme:'system';
-  function applyTheme(){if(theme==='system')root.removeAttribute('data-theme');else root.dataset.theme=theme;themeButton.textContent='Theme: '+(theme==='system'?'System':theme==='light'?'Light':'Dark');themeButton.setAttribute('aria-label','Change theme. Current: '+theme)}
-  applyTheme();themeButton.addEventListener('click',()=>{theme=theme==='system'?'light':theme==='light'?'dark':'system';try{localStorage.setItem(themeKey,theme)}catch{}applyTheme()});
-  let toastTimer;const toast=document.getElementById('toast');
-  document.querySelectorAll('.share-url').forEach(control=>{try{control.textContent=new URL(control.textContent,location.href).href}catch{}});
-  document.querySelectorAll('[data-confirm]').forEach(control=>{const eventName=control.tagName==='FORM'?'submit':'click';control.addEventListener(eventName,event=>{if(!window.confirm(control.dataset.confirm))event.preventDefault()})});
-  document.querySelectorAll('[data-copy-link]').forEach(control=>control.addEventListener('click',async()=>{const url=new URL(control.dataset.copyLink,location.href).href;try{await navigator.clipboard.writeText(url);if(toast){toast.textContent='Link copied';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2200)}}catch{window.prompt('Copy this link:',url)}}));
+  const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s)),root=document.documentElement,themeKey='phpSimpleImageSharing-theme';
+  let toastTimer;
+  function toast(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400)}
 
-  const bulkForm=document.getElementById('bulkActionsForm');
-  if(bulkForm){
-    const boxes=Array.from(document.querySelectorAll('input[name="ids[]"]')),selectVisible=document.getElementById('selectVisible'),selectedCount=document.getElementById('selectedCount');
-    function updateSelection(){const selected=boxes.filter(box=>box.checked).length;selectedCount.textContent=selected+' selected';selectVisible.checked=boxes.length>0&&selected===boxes.length;selectVisible.indeterminate=selected>0&&selected<boxes.length}
-    boxes.forEach(box=>box.addEventListener('change',updateSelection));selectVisible.addEventListener('change',()=>{boxes.forEach(box=>box.checked=selectVisible.checked);updateSelection()});
-    bulkForm.addEventListener('submit',async event=>{if(event.submitter?.value!=='copy')return;event.preventDefault();const ids=boxes.filter(box=>box.checked).map(box=>box.value);if(ids.length===0){if(toast){toast.textContent='Select at least one image';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2200)}return}const urls=ids.map(id=>new URL('?action=image&id='+encodeURIComponent(id),location.href).href),text=urls.join('\n');try{await navigator.clipboard.writeText(text);if(toast){toast.textContent=ids.length+' private '+(ids.length===1?'link copied':'links copied');toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2200)}}catch{window.prompt('Copy these private links:',text)}});
+  const themeButton=$('#themeToggle');let theme='system';
+  try{const saved=localStorage.getItem(themeKey);if(saved==='light'||saved==='dark')theme=saved}catch{}
+  function applyTheme(){if(theme==='system')root.removeAttribute('data-theme');else root.dataset.theme=theme;root.dataset.mode=theme;if(themeButton){const label='Theme: '+theme;themeButton.title=label;themeButton.setAttribute('aria-label',label+'. Click to change.')}}
+  applyTheme();
+  if(themeButton)themeButton.addEventListener('click',()=>{theme=theme==='system'?'light':theme==='light'?'dark':'system';try{localStorage.setItem(themeKey,theme)}catch{}applyTheme();toast('Theme: '+theme)});
+
+  const account=$('details.acct');
+  if(account){document.addEventListener('click',event=>{if(!account.contains(event.target))account.open=false});document.addEventListener('keydown',event=>{if(event.key==='Escape')account.open=false})}
+
+  $$('[data-open-dialog]').forEach(button=>button.addEventListener('click',()=>{if(account)account.open=false;const dialog=document.getElementById(button.dataset.openDialog);if(dialog&&dialog.showModal)dialog.showModal()}));
+  $$('dialog.modal').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog&&!dialog.dataset.busy)dialog.close()}));
+  $$('[data-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
+
+  const confirmDialog=$('#confirmDialog');let confirmResolve=null;
+  function ask(title,text,label){return new Promise(resolve=>{if(!confirmDialog||!confirmDialog.showModal){resolve(window.confirm(title));return}$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;$('#confirmYes').textContent=label;confirmResolve=resolve;confirmDialog.returnValue='';confirmDialog.showModal()})}
+  if(confirmDialog)confirmDialog.addEventListener('close',()=>{if(confirmResolve){const resolve=confirmResolve;confirmResolve=null;resolve(confirmDialog.returnValue==='yes')}});
+  $$('[data-confirm]').forEach(control=>{
+    control.addEventListener('submit',async event=>{
+      if(control.dataset.ok){delete control.dataset.ok;return}
+      event.preventDefault();
+      if(await ask(control.dataset.confirm,'This removes the photo and its share link for everyone. It cannot be undone.','Delete')){control.dataset.ok='1';control.requestSubmit()}
+    });
+  });
+
+  async function copyText(text,message,prompt){try{await navigator.clipboard.writeText(text);toast(message)}catch{window.prompt(prompt,text)}}
+  $$('[data-copy-link]').forEach(button=>button.addEventListener('click',()=>copyText(new URL(button.dataset.copyLink,location.href).href,'Link copied','Copy this link:')));
+  $$('.share-url').forEach(input=>{try{input.value=new URL(input.dataset.path,location.href).href}catch{}input.addEventListener('focus',()=>input.select())});
+
+  const bulk=$('#bulkActionsForm');
+  if(bulk){
+    const boxes=$$('input[name="ids[]"]'),count=$('#selectedCount'),selectPage=$('#selectVisible'),grid=$('#grid');
+    const selected=()=>boxes.filter(box=>box.checked);
+    function update(){const n=selected().length;count.textContent=n+' selected';bulk.classList.toggle('on',n>0);grid.classList.toggle('selecting',n>0);boxes.forEach(box=>box.closest('.tile').classList.toggle('sel',box.checked));selectPage.textContent=n===boxes.length?'Clear page':'Select page'}
+    boxes.forEach(box=>box.addEventListener('change',update));
+    selectPage.addEventListener('click',()=>{const all=boxes.every(box=>box.checked);boxes.forEach(box=>box.checked=!all);update()});
+    $('#clearSel').addEventListener('click',()=>{boxes.forEach(box=>box.checked=false);update()});
+    grid.addEventListener('click',event=>{const link=event.target.closest('.tile-link');if(!link||!bulk.classList.contains('on'))return;event.preventDefault();const box=link.closest('.tile').querySelector('input[name="ids[]"]');box.checked=!box.checked;update()});
+    bulk.addEventListener('submit',async event=>{
+      if(bulk.dataset.ok){delete bulk.dataset.ok;return}
+      const action=event.submitter&&event.submitter.value,chosen=selected();
+      if(action!=='copy'&&action!=='delete')return;
+      event.preventDefault();
+      if(chosen.length===0){toast('Select at least one photo');return}
+      if(action==='copy'){const text=chosen.map(box=>new URL('?action=image&id='+encodeURIComponent(box.value),location.href).href).join('\n');copyText(text,chosen.length+(chosen.length===1?' link copied':' links copied'),'Copy these links:');return}
+      const n=chosen.length;
+      if(await ask('Delete '+n+(n===1?' photo?':' photos?'),'This removes them and their share links for everyone. You can only delete your own photos unless you are an administrator. It cannot be undone.','Delete')){bulk.dataset.ok='1';bulk.requestSubmit(event.submitter)}
+    });
+    update();
   }
 
-  const form=document.getElementById('uploadForm');
+  const form=$('#uploadForm');
   if(form){
-    const input=document.getElementById('imageFiles'),queue=document.getElementById('uploadQueue'),items=document.getElementById('queueItems'),summary=document.getElementById('queueSummary'),button=document.getElementById('uploadButton');
-    let files=[];
-    function selectFiles(next){for(const image of items.querySelectorAll('img'))if(image.src.startsWith('blob:'))URL.revokeObjectURL(image.src);files=[];items.replaceChildren();for(const file of Array.from(next||[])){const row=document.createElement('div');row.className='queue-item';const preview=document.createElement('img');preview.alt='';if(file.type.startsWith('image/'))preview.src=URL.createObjectURL(file);else preview.hidden=true;const name=document.createElement('span');name.className='queue-name';name.textContent=file.name;const track=document.createElement('span');track.className='queue-track';track.setAttribute('role','progressbar');track.setAttribute('aria-label','Upload progress for '+file.name);track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow','0');const fill=document.createElement('span');track.append(fill);const status=document.createElement('span');status.className='queue-status';status.setAttribute('aria-live','polite');status.textContent='Ready';row.append(preview,name,track,status);items.append(row);files.push({file,status,fill,track})}queue.hidden=files.length===0;summary.textContent=files.length?`${files.length} ${files.length===1?'file':'files'} ready`:''}
-    input.addEventListener('change',()=>{selectFiles(input.files);input.value=''});
-    form.addEventListener('dragover',event=>{event.preventDefault();form.classList.add('is-dragover')});
-    form.addEventListener('dragleave',event=>{if(!form.contains(event.relatedTarget))form.classList.remove('is-dragover')});
-    form.addEventListener('drop',event=>{event.preventDefault();form.classList.remove('is-dragover');selectFiles(event.dataTransfer.files)});
-    function uploadFile(entry){return new Promise(resolve=>{const file=entry.file,body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]').value);body.append('images[]',file,file.name);const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=120000;xhr.setRequestHeader('Accept','application/json');xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});xhr.addEventListener('load',()=>{let result;try{result=JSON.parse(xhr.responseText).items?.[0]}catch{}if(xhr.status>=200&&xhr.status<300&&result?.success){entry.fill.style.width='100%';entry.track.setAttribute('aria-valuenow','100');entry.status.className='queue-status success';entry.status.textContent='Uploaded';resolve(true)}else{entry.status.className='queue-status failed';entry.status.textContent=result?.error||'Upload failed';resolve(false)}});xhr.addEventListener('error',()=>{entry.status.className='queue-status failed';entry.status.textContent='Connection failed';resolve(false)});xhr.addEventListener('timeout',()=>{entry.status.className='queue-status failed';entry.status.textContent='Upload timed out. Try again.';resolve(false)});xhr.send(body)})}
-    form.addEventListener('submit',async event=>{if(files.length===0)return;event.preventDefault();button.disabled=true;input.disabled=true;let succeeded=0;for(const entry of files){entry.fill.style.width='0%';entry.status.className='queue-status';entry.status.textContent='Uploading…';const ok=await uploadFile(entry);if(ok)succeeded++}const failed=files.length-succeeded;button.disabled=false;input.disabled=false;if(succeeded>0&&failed===0){summary.textContent='Upload complete. Refreshing gallery…';setTimeout(()=>location.reload(),1100)}else if(failed>0){summary.textContent=`${succeeded} uploaded · ${failed} failed`;if(succeeded>0){files=files.filter(entry=>entry.status.classList.contains('failed'));const refresh=document.createElement('a');refresh.href='./';refresh.className='queue-refresh';refresh.textContent='Refresh gallery to see uploaded images';summary.append(' · ',refresh)}}});
+    const dialog=$('#uploadDialog'),input=$('#imageFiles'),queue=$('#uploadQueue'),items=$('#queueItems'),summary=$('#queueSummary'),button=$('#uploadButton'),hint=$('#retentionHint');
+    let files=[],busy=false,uploadedSome=false;
+    const plural=(n,word)=>n+' '+word+(n===1?'':'s');
+    function keepDate(){const value=form.querySelector('[name="retention"]:checked').value;if(value==='never')return null;const d=new Date(Date.now()+Number(value)*864e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+    function updateHint(){const date=keepDate();hint.textContent=date?'They will be deleted on '+date+'. Backups and copies elsewhere are not removed.':'They stay until someone deletes them.'}
+    $$('[name="retention"]',form).forEach(radio=>radio.addEventListener('change',updateHint));updateHint();
+    function refresh(){const pending=files.filter(f=>!f.done).length,failed=files.some(f=>f.failed);button.disabled=busy||pending===0;button.textContent=pending===0?'Upload':(failed?'Retry '+plural(pending,'photo'):'Upload '+plural(pending,'photo'))}
+    function clear(){for(const img of $$('img',items))if(img.src.startsWith('blob:'))URL.revokeObjectURL(img.src);files=[];items.replaceChildren();queue.hidden=true;summary.textContent='';refresh()}
+    function addFiles(list){
+      clear();
+      for(const file of Array.from(list||[])){
+        const row=document.createElement('div');row.className='qi';
+        const thumb=document.createElement('img');thumb.alt='';if(file.type.startsWith('image/'))thumb.src=URL.createObjectURL(file);else thumb.hidden=true;
+        const body=document.createElement('div');
+        const name=document.createElement('div');name.className='qn';name.textContent=file.name;
+        const status=document.createElement('div');status.className='qs';status.textContent='Ready';status.setAttribute('aria-live','polite');
+        const track=document.createElement('div');track.className='qt';track.setAttribute('role','progressbar');track.setAttribute('aria-label','Upload progress for '+file.name);track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow','0');
+        const fill=document.createElement('i');track.append(fill);body.append(name,status,track);row.append(thumb,body);items.append(row);
+        files.push({file,status,fill,track,done:false,failed:false});
+      }
+      queue.hidden=files.length===0;summary.textContent=files.length?plural(files.length,'photo')+' ready':'';refresh();
+    }
+    $$('[data-add-photos]').forEach(control=>control.addEventListener('click',()=>input.click()));
+    input.addEventListener('change',()=>{if(input.files.length){addFiles(input.files);if(!dialog.open)dialog.showModal()}input.value=''});
+    dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault()});
+    dialog.addEventListener('close',()=>{if(uploadedSome){location.reload();return}clear()});
+
+    const hasFiles=event=>Array.from((event.dataTransfer&&event.dataTransfer.types)||[]).includes('Files');
+    let depth=0;
+    document.addEventListener('dragenter',event=>{if(hasFiles(event)){depth++;root.classList.add('dragging')}});
+    document.addEventListener('dragleave',event=>{if(hasFiles(event)){depth=Math.max(0,depth-1);if(!depth)root.classList.remove('dragging')}});
+    document.addEventListener('dragover',event=>{if(hasFiles(event))event.preventDefault()});
+    document.addEventListener('drop',event=>{if(!hasFiles(event))return;event.preventDefault();depth=0;root.classList.remove('dragging');if(busy||$('dialog[open]:not(#uploadDialog)'))return;addFiles(event.dataTransfer.files);if(!dialog.open)dialog.showModal()});
+
+    function upload(entry){return new Promise(resolve=>{
+      const body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]:checked').value);body.append('images[]',entry.file,entry.file.name);
+      const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=120000;xhr.setRequestHeader('Accept','application/json');
+      const fail=text=>{entry.status.className='qs fail';entry.status.textContent=text;resolve(false)};
+      xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});
+      xhr.addEventListener('load',()=>{let result;try{result=JSON.parse(xhr.responseText).items[0]}catch{}if(xhr.status>=200&&xhr.status<300&&result&&result.success){entry.fill.style.width='100%';entry.track.setAttribute('aria-valuenow','100');entry.status.className='qs ok';entry.status.textContent='Uploaded';resolve(true)}else fail((result&&result.error)||'Upload failed. Try again.')});
+      xhr.addEventListener('error',()=>fail('Connection lost. Try again.'));
+      xhr.addEventListener('timeout',()=>fail('Upload timed out. Try again.'));
+      xhr.send(body);
+    })}
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      const pending=files.filter(f=>!f.done);if(!pending.length)return;
+      busy=true;dialog.dataset.busy='1';refresh();let failed=0;
+      for(const entry of pending){entry.failed=false;entry.fill.style.width='0%';entry.status.className='qs';entry.status.textContent='Uploading…';if(await upload(entry)){entry.done=true;uploadedSome=true}else{entry.failed=true;failed++}}
+      busy=false;delete dialog.dataset.busy;refresh();
+      if(failed===0){summary.textContent='Done. Refreshing…';setTimeout(()=>location.reload(),600)}
+      else summary.textContent=plural(files.filter(f=>f.done).length,'photo')+' uploaded, '+failed+' failed.';
+    });
   }
+
+  document.addEventListener('keydown',event=>{
+    if($('dialog[open]')||event.target.closest('input,select,textarea'))return;
+    const link=event.key==='ArrowLeft'?$('a[rel="prev"]'):event.key==='ArrowRight'?$('a[rel="next"]'):null;
+    if(link)link.click();
+  });
 })();
 JS;
     echo '</script></body></html>';
@@ -632,7 +1190,7 @@ function generateShareToken(): string
 function sharePath(string $token): string
 {
     $scriptName = str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
-    $basePath = dirname($scriptName);
+    $basePath = str_replace('\\', '/', dirname($scriptName));
     if ($basePath === '/' || $basePath === '.') $basePath = '';
     return rtrim($basePath, '/') . '/' . rawurlencode($token);
 }

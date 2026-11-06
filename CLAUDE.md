@@ -11,7 +11,7 @@ Small self-hosted private media album for friends. PHP 8.4, PDO SQLite, Apache s
 ## Rules
 - No Composer, Node, Docker, queues or cron requirements; it must run on ordinary PHP hosting.
 - All UI text and docs in English; dates displayed as `YYYY-MM-DD`.
-- Flat, simple UI in the chosen "C - Album" direction (`design-directions.html`); light and dark themes via CSS variables; mobile-first.
+- Flat, photo-first UI: neutral surfaces, one indigo accent, system fonts only (CSP blocks external requests), expiry bar on every photo; light and dark themes via CSS variables; mobile-first.
 - Never log or echo passwords, session IDs or share tokens. Share tokens are stored only as hashes.
 - Gallery and original media stay behind sign-in; media is served through PHP after an authorization check. Invalid, revoked or expired share links redirect to the Rickroll video.
 - When config options or features change, update `config.example.php`, `README.md` and the `todo.md` checkboxes together.

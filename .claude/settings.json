@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "php \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-config.php\"" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "php \"$CLAUDE_PROJECT_DIR/.claude/hooks/php-lint.php\"" }]
+      }
+    ]
+  }
+}

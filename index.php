@@ -500,6 +500,7 @@ function pageEnd(): void {
   function applyTheme(){if(theme==='system')root.removeAttribute('data-theme');else root.dataset.theme=theme;themeButton.textContent='Theme: '+(theme==='system'?'System':theme==='light'?'Light':'Dark');themeButton.setAttribute('aria-label','Change theme. Current: '+theme)}
   applyTheme();themeButton.addEventListener('click',()=>{theme=theme==='system'?'light':theme==='light'?'dark':'system';try{localStorage.setItem(themeKey,theme)}catch{}applyTheme()});
   let toastTimer;const toast=document.getElementById('toast');
+  document.querySelectorAll('.share-url').forEach(control=>{try{control.textContent=new URL(control.textContent,location.href).href}catch{}});
   document.querySelectorAll('[data-confirm]').forEach(control=>{const eventName=control.tagName==='FORM'?'submit':'click';control.addEventListener(eventName,event=>{if(!window.confirm(control.dataset.confirm))event.preventDefault()})});
   document.querySelectorAll('[data-copy-link]').forEach(control=>control.addEventListener('click',async()=>{const url=new URL(control.dataset.copyLink,location.href).href;try{await navigator.clipboard.writeText(url);if(toast){toast.textContent='Link copied';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2200)}}catch{window.prompt('Copy this link:',url)}}));
 

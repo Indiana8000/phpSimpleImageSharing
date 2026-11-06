@@ -71,7 +71,7 @@ data_dir/
 - [x] Build a responsive thumbnail grid with lazy-loaded images and a keyboard-accessible detail view.
 - [x] Add next/previous navigation, original download, and private-link copying to the detail view.
 - [x] Sort by newest/oldest upload and search filenames.
-- [ ] Add multi-select with a few bulk actions: copy links and delete selected images.
+- [x] Add multi-select with bulk actions to copy private links and delete selected images.
 - [x] Confirm deletion with the filename.
 - [x] Show a clear deletion success or error message.
 - [x] Add an empty state and pagination for larger collections.

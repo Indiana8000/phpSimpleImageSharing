@@ -32,6 +32,7 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
 - Choose whether each upload is kept forever or deleted after 1, 7, or 30 days. Expired files are removed in small batches during signed-in requests; no cron job is required.
 - Search image filenames, sort by upload date, browse a paginated gallery, and open an image detail view with previous/next navigation, private-link copying, and original download.
+- Select several images to copy their private links or delete them in one action; deletion permissions are checked per image.
 - JPEG, PNG, GIF, and WebP uploads, limited to 12 MiB by default.
 - Dates are displayed as `YYYY-MM-DD`.
 - Video support is planned.

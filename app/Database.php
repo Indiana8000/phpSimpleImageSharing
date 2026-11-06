@@ -153,6 +153,7 @@ final class Database
                 id TEXT PRIMARY KEY NOT NULL,
                 media_id TEXT NOT NULL,
                 token_hash TEXT NOT NULL UNIQUE,
+                token TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 expires_at INTEGER,
                 revoked_at INTEGER,

@@ -324,12 +324,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
                 $revoke->execute([':revoked_at' => $now, ':media_id' => $mediaId]);
                 $insert = $pdo->prepare(
-                    'INSERT INTO share_links (id, media_id, token_hash, created_at, expires_at, revoked_at)
-                     VALUES (:id, :media_id, :token_hash, :created_at, :expires_at, NULL)'
+                    'INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at)
+                     VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)'
                 );
                 $insert->execute([
                     ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId,
-                    ':token_hash' => hash('sha256', $tokenValue), ':created_at' => $now,
+                    ':token_hash' => hash('sha256', $tokenValue), ':token' => $tokenValue, ':created_at' => $now,
                     ':expires_at' => $sharedMedia['expires_at'],
                 ]);
                 $pdo->commit();
@@ -337,7 +337,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $exception;
             }
-            $_SESSION['flash_share'] = ['id' => $mediaId, 'path' => sharePath($tokenValue)];
             $_SESSION['flash_notice'] = 'New share link created. The old link no longer works.';
             $returnQuery = [
                 'action' => 'detail',
@@ -537,14 +536,14 @@ if ($action === 'detail') {
     $detailImageUrl = '?action=image&id=' . rawurlencode((string)$detail['id']);
     $canManage = $currentUser['role'] === 'admin' || $detail['owner_id'] === $currentUser['id'];
     $detailExpiry = expiryInfo($detail, time());
-    $flashShare = $_SESSION['flash_share'] ?? null;
-    unset($_SESSION['flash_share']);
-    $shownShare = is_array($flashShare) && hash_equals((string)($flashShare['id'] ?? ''), (string)$detail['id']) ? (string)($flashShare['path'] ?? '') : '';
+    $shownShare = '';
     $hasShare = false;
     if ($canManage) {
-        $shareStatement = $pdo->prepare('SELECT 1 FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now) LIMIT 1');
+        $shareStatement = $pdo->prepare('SELECT token FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now) ORDER BY created_at DESC LIMIT 1');
         $shareStatement->execute([':id' => (string)$detail['id'], ':now' => time()]);
-        $hasShare = $shareStatement->fetchColumn() !== false;
+        $shareRow = $shareStatement->fetch(PDO::FETCH_ASSOC);
+        $hasShare = is_array($shareRow);
+        if ($hasShare) $shownShare = sharePath((string)$shareRow['token']);
     }
     pageStart((string)$detail['original_name'], 'viewer');
     ?>
@@ -579,7 +578,7 @@ if ($action === 'detail') {
         <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
         <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
         <input type="hidden" name="return_q" value="<?= h($searchTerm) ?>"><input type="hidden" name="return_sort" value="<?= h($sortOrder) ?>"><input type="hidden" name="return_filter" value="<?= h($filter) ?>"><input type="hidden" name="return_page" value="<?= (int)$galleryPage ?>">
-        <button class="btn primary"><?= icon('link') ?><?= $hasShare || $shownShare !== '' ? 'Create new share link' : 'Create share link' ?></button>
+        <button class="btn<?= $shownShare === '' ? ' primary' : '' ?>"><?= icon('link') ?><?= $hasShare ? 'Create new share link' : 'Create share link' ?></button>
       </form>
       <p class="hint" style="margin-top:8px">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
 <?php endif; ?>

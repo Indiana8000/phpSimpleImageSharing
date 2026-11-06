@@ -12,7 +12,7 @@ Checklist:
 - **Uploads**: size limit enforced server-side, real content checked (`fileinfo`), only JPEG/PNG/GIF/WebP, original names sanitized, nothing stored under the web root.
 - **Paths**: no request parameter ever becomes a file path; media resolved via SQLite id and the internal user ID directory.
 - **Authorization**: members can only delete their own media; admin actions check role; expired media is never served.
-- **Share links**: tokens come from `random_bytes`, only hashes stored, compared with `hash_equals`, access limited to that one item, invalid/expired/revoked go to the redirect, tokens never in logs or errors.
+- **Share links**: tokens come from `random_bytes`, hash used for lookup (the token is also stored for the owner to copy again; check it is only shown to the owner or an admin), access limited to that one item, invalid/expired/revoked go to the redirect, tokens never in logs or errors.
 - **Output**: all user-controlled values escaped with `h()`; JSON/JS contexts safe.
 - **Config/data**: `config.php` and the data directory stay private; no secrets in tracked files.
 

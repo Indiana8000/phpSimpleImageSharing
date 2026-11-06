@@ -1,14 +1,17 @@
 {
+  "permissions": {
+    "deny": ["Edit(/config.php)", "Write(/config.php)"]
+  },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [{ "type": "command", "command": "php \"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-config.php\"" }]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [{ "type": "command", "command": "php \"$CLAUDE_PROJECT_DIR/.claude/hooks/php-lint.php\"" }]
       }
     ]

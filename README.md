@@ -27,6 +27,7 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 
 - Individual administrator and member accounts; public self-registration is disabled.
 - All signed-in users can view the group gallery. Members can delete their own uploads; administrators can delete any upload and manage accounts.
+- Drag-and-drop and multi-image upload with per-file progress and retry for failures.
 - JPEG, PNG, GIF, and WebP uploads, limited to 12 MiB by default.
 - Dates are displayed as `YYYY-MM-DD`.
 - Image links currently require sign-in; public share links and video support are planned, but not implemented yet.

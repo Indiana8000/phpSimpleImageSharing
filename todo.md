@@ -57,12 +57,12 @@ data_dir/
 
 ## 1. Comfortable uploads
 
-- [ ] Support file selection and drag-and-drop.
-- [ ] Upload multiple images at once and show progress, failures, and successes per file.
-- [ ] Add uploaded images to the gallery immediately and sort by upload time.
+- [x] Support file selection and drag-and-drop.
+- [x] Upload multiple images at once and show progress, failures, and successes per file.
+- [x] Add uploaded images to the gallery immediately and sort by upload time.
 - [x] After upload, offer a clear “Copy link” action, confirm success, and show the link as a fallback.
-- [ ] Add an upload preview and clear guidance about supported formats and size limits.
-- [ ] Allow retrying after cancellation or connection errors without duplicating successful uploads.
+- [x] Add an upload preview and clear guidance about supported formats and size limits.
+- [x] Allow retrying after cancellation or connection errors without duplicating successful uploads.
 
 **Done when:** a friend can upload several images from a phone or desktop and copy their links easily.
 

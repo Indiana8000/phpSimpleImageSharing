@@ -30,9 +30,10 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Drag-and-drop and multi-image upload with per-file progress and retry for failures.
 - Generate a public, unguessable share link for one image. Generating another link revokes the previous one; links expire when the image expires.
 - Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
+- Choose whether each upload is kept forever or deleted after 1, 7, or 30 days. Expired files are removed in small batches during signed-in requests; no cron job is required.
 - JPEG, PNG, GIF, and WebP uploads, limited to 12 MiB by default.
 - Dates are displayed as `YYYY-MM-DD`.
-- Video support and selectable image retention are planned, but not implemented yet.
+- Video support is planned.
 
 Public share URLs use Apache `mod_rewrite` through the included `.htaccess`. If using another web server, configure `/s/<26-character-token>` to reach `index.php?share=<token>` and route other `/s/` paths to `index.php?invalid_share=1`.
 

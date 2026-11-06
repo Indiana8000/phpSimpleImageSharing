@@ -35,6 +35,7 @@ $dataDir = $resolvedDataDir;
 require_once __DIR__ . '/app/Database.php';
 require_once __DIR__ . '/app/Auth.php';
 require_once __DIR__ . '/app/MediaStorage.php';
+require_once __DIR__ . '/app/MediaCleanup.php';
 require_once __DIR__ . '/app/LoginRateLimiter.php';
 
 try {
@@ -48,7 +49,6 @@ try {
     echo 'The application could not start. Check PHP extensions, the initial admin password hash, and data directory permissions.';
     exit;
 }
-
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 ini_set('session.cookie_httponly', '1');
@@ -129,6 +129,12 @@ if ($currentUser === null) {
     pageEnd(); exit;
 }
 
+try {
+    MediaCleanup::run($pdo, $mediaStorage, 10);
+} catch (Throwable $exception) {
+    error_log('phpSimpleImageSharing cleanup error: ' . $exception->getMessage());
+}
+
 if ($action === 'image') {
     $id = (string)($_GET['id'] ?? '');
     if (!preg_match('/\A[a-f0-9]{32,64}\z/', $id)) { http_response_code(404); exit; }
@@ -151,12 +157,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf();
     try {
         if ($action === 'upload') {
+            $retentionDays = (string)($_POST['retention'] ?? 'never');
+            if (!in_array($retentionDays, ['never', '1', '7', '30'], true)) {
+                throw new InvalidArgumentException('Choose a valid image retention period.');
+            }
+            $expiresAt = $retentionDays === 'never' ? null : time() + ((int)$retentionDays * 86400);
             $uploads = normalizeUploads($_FILES['images'] ?? ($_FILES['image'] ?? null));
             if ($uploads === []) $uploads[] = ['name' => '', 'tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE, 'size' => 0, 'type' => ''];
             $uploadResults = [];
             $insert = $pdo->prepare(
-                'INSERT INTO media (id, owner_id, storage_name, original_name, mime, size_bytes, created_at)
-                 VALUES (:id, :owner_id, :storage_name, :original_name, :mime, :size_bytes, :created_at)'
+                'INSERT INTO media (id, owner_id, storage_name, original_name, mime, size_bytes, created_at, expires_at)
+                 VALUES (:id, :owner_id, :storage_name, :original_name, :mime, :size_bytes, :created_at, :expires_at)'
             );
             foreach ($uploads as $upload) {
                 try {
@@ -166,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $insert->execute([
                             ':id' => $stored['id'], ':owner_id' => $currentUser['id'], ':storage_name' => $stored['storage_name'],
                             ':original_name' => $stored['original_name'], ':mime' => $stored['mime'],
-                            ':size_bytes' => $stored['size_bytes'], ':created_at' => $createdAt,
+                            ':size_bytes' => $stored['size_bytes'], ':created_at' => $createdAt, ':expires_at' => $expiresAt,
                         ]);
                     } catch (Throwable $exception) {
                         $mediaStorage->delete($currentUser['id'], $stored['storage_name']);
@@ -258,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $images = [];
 try {
     $query = $pdo->prepare(
-        'SELECT media.id, media.owner_id, media.storage_name, media.original_name, media.mime, media.size_bytes, media.created_at,
+        'SELECT media.id, media.owner_id, media.storage_name, media.original_name, media.mime, media.size_bytes, media.created_at, media.expires_at,
                 users.display_name, users.username
          FROM media JOIN users ON users.id = media.owner_id
          WHERE media.expires_at IS NULL OR media.expires_at > :now
@@ -288,7 +299,7 @@ pageStart('Gallery');
 if ($error) echo '<p class="error">' . h($error) . '</p>';
 if ($notice) echo '<p class="notice">' . $notice . '</p>';
 echo '<section class="welcome"><div><p class="eyebrow">Your private album · Signed in as ' . h($currentUser['username']) . '</p><h1>Our moments</h1><p class="subheading">A small collection of moments shared with friends.</p></div><div class="welcome-actions">' . ($currentUser['role'] === 'admin' ? '<a class="quiet-button" href="?action=users">Manage users</a>' : '') . '<span class="private-badge"><span></span>Private</span></div></section>';
-echo '<form class="upload" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><div class="upload-copy"><span class="upload-icon" aria-hidden="true">↑</span><div><strong>Add images</strong><small>Drop files here or choose them · JPEG, PNG, GIF, WebP · up to ' . h((string)round($maxBytes / 1024 / 1024)) . ' MB each</small></div></div><label class="file-control"><span>Choose images</span><input id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label><button class="primary" id="uploadButton">Upload</button><div class="upload-queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div></form>';
+echo '<form class="upload" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><div class="upload-copy"><span class="upload-icon" aria-hidden="true">↑</span><div><strong>Add images</strong><small>Drop files here or choose them · JPEG, PNG, GIF, WebP · up to ' . h((string)round($maxBytes / 1024 / 1024)) . ' MB each</small></div></div><label class="retention-control" for="retention"><span>Keep for</span><select id="retention" name="retention"><option value="never">Never delete</option><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select></label><label class="file-control"><span>Choose images</span><input id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label><button class="primary" id="uploadButton">Upload</button><div class="upload-queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div></form>';
 echo '<div class="section-heading"><div><h2>All images</h2><p>' . count($images) . ' ' . (count($images) === 1 ? 'image' : 'images') . '</p></div><span class="sort-label">Newest first</span></div>';
 if (!$images) echo '<div class="empty"><span class="empty-icon">▧</span><h2>Your album is ready for its first image</h2><p>Add an image above to get started.</p></div>';
 echo '<div class="grid">';
@@ -298,7 +309,8 @@ foreach ($images as $image) {
     $name = (string)$image['original_name'];
     $created = (int)$image['created_at'];
     $canManage = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
-    echo '<article class="photo-card"><a class="photo" href="' . h($imageUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time><small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" onsubmit="return confirm(\'Delete this image?\')"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
+    $expiryLabel = $image['expires_at'] === null ? '' : '<small class="expiry-label">Deletes ' . h(date('Y-m-d', (int)$image['expires_at'])) . '</small>';
+    echo '<article class="photo-card"><a class="photo" href="' . h($imageUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time>' . $expiryLabel . '<small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" onsubmit="return confirm(\'Delete this image?\')"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
 }
 echo '</div><form class="logout" method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button class="text-action">Sign out</button></form><div class="toast" id="toast" role="status" aria-live="polite"></div>';
 pageEnd();
@@ -316,7 +328,7 @@ function pageStart(string $title): void {
     @media(max-width:600px){.app-shell{padding:0 15px 32px}.topbar{height:64px;margin-bottom:29px}.welcome{align-items:flex-start}.welcome h1{font-size:33px}.upload{align-items:stretch;flex-wrap:wrap;padding:12px;gap:9px}.upload-copy{width:100%;margin:0 0 4px}.file-control{flex:1}.file-control span,.primary{height:38px;display:grid;place-items:center}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.photo-info{padding:9px}.photo-actions{gap:8px}.theme-toggle{padding:7px 9px}}@media(max-width:380px){.grid{grid-template-columns:1fr}.photo{aspect-ratio:16/10}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
     </style><body><div class="app-shell"><header class="topbar"><a class="brand" href="./"><span class="brand-mark">P</span>phpSimpleImageSharing</a><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button">Theme: System</button></div></header><main>';
     echo '<style>.login-panel{max-width:460px;margin:0 auto;padding:28px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.login-panel h1{font:500 32px/1.2 Georgia,serif;letter-spacing:-.04em;margin:0}.login-panel .subheading{margin-bottom:24px}.login-form{display:grid;gap:9px}.login-form label,.user-create label,.password-reset{font-size:12px;font-weight:650}.login-form input,.user-create input,.user-create select,.password-reset input{font:inherit;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.login-form .primary{margin-top:5px}.welcome-actions{display:flex;align-items:center;gap:9px}.admin-panel{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.admin-panel h2{font-size:15px;margin:0}.admin-panel>p{color:var(--muted);font-size:12px;margin:3px 0 16px}.user-create{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;align-items:end}.user-create label,.password-reset{display:grid;gap:5px}.user-create .primary{height:39px}.user-list{display:grid;gap:9px}.user-card{display:flex;align-items:center;gap:15px;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.user-card>div:first-child{flex:1;min-width:140px}.user-card strong,.user-card small{display:block}.user-card strong{font-size:13px}.user-card small{color:var(--muted);font-size:11px}.user-actions{display:flex;align-items:end;gap:8px;margin:0}.password-reset input{width:145px;padding:7px}.photo-info .owner-label{display:block;color:var(--muted);font-size:10px;margin-top:3px}.share-url{font-size:12px;padding:2px 6px;background:var(--quiet);border-radius:5px;color:var(--ink)}@media(max-width:750px){.user-create{grid-template-columns:repeat(2,minmax(0,1fr))}.user-card{flex-wrap:wrap}.user-card>div:first-child{flex-basis:100%}.password-reset input{width:130px}}@media(max-width:600px){.login-panel{padding:20px}.brand{font-size:13px;letter-spacing:-.07em}.brand-mark{width:25px;height:25px}.welcome-actions{align-items:flex-end;flex-direction:column}.user-create{grid-template-columns:1fr}.user-card{align-items:flex-start}.user-actions{flex-wrap:wrap}}</style>';
-    echo '<style>.upload{flex-wrap:wrap}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:#56815f}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
+    echo '<style>.upload{flex-wrap:wrap}.retention-control{min-width:120px}.expiry-label{display:block;color:var(--muted);font-size:10px;margin-top:2px}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:#56815f}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.retention-control{flex:1;min-width:130px}.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
 }
 function pageEnd(): void {
     echo '</main></div><script>';
@@ -338,7 +350,7 @@ function pageEnd(): void {
     form.addEventListener('dragover',event=>{event.preventDefault();form.classList.add('is-dragover')});
     form.addEventListener('dragleave',event=>{if(!form.contains(event.relatedTarget))form.classList.remove('is-dragover')});
     form.addEventListener('drop',event=>{event.preventDefault();form.classList.remove('is-dragover');selectFiles(event.dataTransfer.files)});
-    function uploadFile(entry){return new Promise(resolve=>{const file=entry.file,body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('images[]',file,file.name);const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=120000;xhr.setRequestHeader('Accept','application/json');xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});xhr.addEventListener('load',()=>{let result;try{result=JSON.parse(xhr.responseText).items?.[0]}catch{}if(xhr.status>=200&&xhr.status<300&&result?.success){entry.fill.style.width='100%';entry.track.setAttribute('aria-valuenow','100');entry.status.className='queue-status success';entry.status.textContent='Uploaded';resolve(true)}else{entry.status.className='queue-status failed';entry.status.textContent=result?.error||'Upload failed';resolve(false)}});xhr.addEventListener('error',()=>{entry.status.className='queue-status failed';entry.status.textContent='Connection failed';resolve(false)});xhr.addEventListener('timeout',()=>{entry.status.className='queue-status failed';entry.status.textContent='Upload timed out. Try again.';resolve(false)});xhr.send(body)})}
+    function uploadFile(entry){return new Promise(resolve=>{const file=entry.file,body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]').value);body.append('images[]',file,file.name);const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=120000;xhr.setRequestHeader('Accept','application/json');xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});xhr.addEventListener('load',()=>{let result;try{result=JSON.parse(xhr.responseText).items?.[0]}catch{}if(xhr.status>=200&&xhr.status<300&&result?.success){entry.fill.style.width='100%';entry.track.setAttribute('aria-valuenow','100');entry.status.className='queue-status success';entry.status.textContent='Uploaded';resolve(true)}else{entry.status.className='queue-status failed';entry.status.textContent=result?.error||'Upload failed';resolve(false)}});xhr.addEventListener('error',()=>{entry.status.className='queue-status failed';entry.status.textContent='Connection failed';resolve(false)});xhr.addEventListener('timeout',()=>{entry.status.className='queue-status failed';entry.status.textContent='Upload timed out. Try again.';resolve(false)});xhr.send(body)})}
     form.addEventListener('submit',async event=>{if(files.length===0)return;event.preventDefault();button.disabled=true;input.disabled=true;let succeeded=0;for(const entry of files){entry.fill.style.width='0%';entry.status.className='queue-status';entry.status.textContent='Uploading…';const ok=await uploadFile(entry);if(ok)succeeded++}const failed=files.length-succeeded;button.disabled=false;input.disabled=false;if(succeeded>0&&failed===0){summary.textContent='Upload complete. Refreshing gallery…';setTimeout(()=>location.reload(),1100)}else if(failed>0){summary.textContent=`${succeeded} uploaded · ${failed} failed`;if(succeeded>0){files=files.filter(entry=>entry.status.classList.contains('failed'));const refresh=document.createElement('a');refresh.href='./';refresh.className='queue-refresh';refresh.textContent='Refresh gallery to see uploaded images';summary.append(' · ',refresh)}}});
   }
 })();

@@ -104,11 +104,11 @@ data_dir/
 
 ## 5. Automatic deletion
 
-- [ ] Let the uploader choose an optional retention period, for example “never”, 1 day, 7 days, 30 days, or a custom date.
-- [ ] Store the expiration time server-side and prevent expired media from appearing or being served.
-- [ ] Automatically remove expired files and metadata; on hosting without cron, perform small, bounded cleanup steps on page requests.
+- [x] Let the uploader choose a minimal retention period: never, 1 day, 7 days, or 30 days.
+- [x] Store expiration time server-side and prevent expired media from appearing in the gallery or being served.
+- [x] Automatically remove expired files and metadata in small, bounded batches during signed-in requests; no cron is required.
 - [ ] Optionally document a host cron job that runs the same cleanup task regularly.
-- [ ] Show the expiration date in the gallery and detail view and let authorized users change it.
+- [x] Show the expiration date in the gallery. Changing retention after upload is not supported yet.
 - [ ] Explain that deleting from phpSimpleImageSharing does not remove external copies or backups; backups need a separate retention period.
 
 **Done when:** media becomes inaccessible at its chosen expiration and is removed from active storage soon afterward, with or without cron.

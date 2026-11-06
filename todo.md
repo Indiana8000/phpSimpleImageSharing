@@ -16,11 +16,11 @@ Goal: a small, reliable private media album for friends that runs on ordinary PH
 
 Chosen direction: **C · Album** from `design-directions.html` — warm, restrained colors, serif page headings, and larger image cards.
 
-- [ ] Implement light and dark themes with CSS variables; follow the system preference on first visit.
-- [ ] Provide an easy-to-find light/dark/system switch and save the manual choice in the browser.
-- [ ] Use neutral surfaces and text, with one subtle accent color for primary actions, warnings, and errors.
-- [ ] Use a flat visual style without gradients, strong shadows, or unnecessary borders; keep spacing, typography, and components consistent.
-- [ ] Design mobile-first: upload, copy-link, and gallery actions must work on narrow screens without horizontal scrolling.
+- [x] Implement light and dark themes with CSS variables; follow the system preference on first visit.
+- [x] Provide an easy-to-find light/dark/system switch and save the manual choice in the browser.
+- [x] Use neutral surfaces and text, with one subtle accent color for primary actions, warnings, and errors.
+- [x] Use a flat visual style without gradients, strong shadows, or unnecessary borders; keep spacing, typography, and components consistent.
+- [x] Design mobile-first: upload, copy-link, and gallery actions must work on narrow screens without horizontal scrolling.
 - [ ] Ensure keyboard access, visible focus, sufficient contrast in both themes, and clear labels.
 - [ ] Define consistent loading, empty-gallery, upload-progress, success, error, and expired-share states.
 
@@ -37,19 +37,19 @@ data_dir/
   tmp/
 ```
 
-- [ ] Store users, media metadata, share-token hashes, and expiration times in SQLite; keep media as regular files.
-- [ ] Use a permanent random internal user ID for directory names, never a login or display name.
-- [ ] Keep the database and user directories outside the web root. Serve media through PHP only after checking authorization.
-- [ ] Check and choose the SQLite journal mode on the Hetzner host; in WAL mode, the database and journal files must be local to the same host and filesystem.
-- [ ] Keep write transactions short, set `busy_timeout`, and handle temporary write locks gracefully.
+- [x] Store users, media metadata, share-token hashes, and expiration times in SQLite; keep media as regular files.
+- [x] Use a permanent random internal user ID for directory names, never a login or display name.
+- [x] Keep the database and user directories outside the web root. Serve media through PHP only after checking authorization.
+- [x] Use SQLite's default rollback journal mode and a 5-second `busy_timeout`; reconsider WAL only after checking the Hetzner host.
+- [x] Keep write transactions short and handle temporary write locks through SQLite's busy timeout.
 - [ ] Back up the SQLite database and media directories as a consistent set; document restoring them together.
 
 ## 0. Solid foundation
 
 - [ ] Simplify first-time setup: clear instructions, configuration checks, and actionable errors for PHP version, extensions, permissions, HTTPS, and upload limits.
-- [ ] Protect secrets and private data: keep `config.php`, the data directory, and backups outside the web root; verify Git ignore rules and examples.
-- [ ] Harden sign-in: limit login attempts, set session cookies before starting the session, rotate the session ID after sign-in, and consistently enforce logout and CSRF protection.
-- [ ] Secure uploads: enforce size limits server-side, inspect actual file content, reject malformed or oversized images, and sanitize original names used as display metadata.
+- [x] Protect secrets and private data: keep `config.php` and the data directory outside the web root; verify Git ignore rules and examples.
+- [x] Harden sign-in: limit login attempts, set session cookies before starting the session, rotate the session ID after sign-in, and consistently enforce logout and CSRF protection.
+- [x] Secure uploads: enforce size limits server-side, inspect actual file content, reject malformed or oversized images, and sanitize original names used as display metadata.
 - [ ] Use consistent error handling and logs without recording passwords, session IDs, or private share tokens.
 - [ ] Add maintenance information: show configuration and storage usage in the admin area; document backup and restore.
 
@@ -60,7 +60,7 @@ data_dir/
 - [ ] Support file selection and drag-and-drop.
 - [ ] Upload multiple images at once and show progress, failures, and successes per file.
 - [ ] Add uploaded images to the gallery immediately and sort by upload time.
-- [ ] After upload, offer a clear “Copy link” action, confirm success, and show the link as a fallback.
+- [x] After upload, offer a clear “Copy link” action, confirm success, and show the link as a fallback.
 - [ ] Add an upload preview and clear guidance about supported formats and size limits.
 - [ ] Allow retrying after cancellation or connection errors without duplicating successful uploads.
 
@@ -93,12 +93,12 @@ data_dir/
 
 ## 4. Individual accounts for friends
 
-- [ ] Replace the shared password with individual user accounts.
-- [ ] Add simple admin actions: create, disable, and reset accounts; keep public self-registration off by default.
-- [ ] Store password hashes with PHP `password_hash`, limit login attempts, and revoke sessions when an account is switched or disabled.
-- [ ] Show all private group media in the gallery, with the uploader and upload date identified.
-- [ ] Keep permissions to two roles: administrator and member. Admins manage accounts and all media; members upload and manage their own media.
-- [ ] Enforce delete and share permissions so members cannot change other people’s media or accounts.
+- [x] Replace the shared password with individual user accounts.
+- [x] Add simple admin actions: create, disable, and reset accounts; keep public self-registration off by default.
+- [x] Store password hashes with PHP `password_hash`, limit login attempts, and revoke sessions when an account is switched or disabled.
+- [x] Show all private group media in the gallery, with the uploader and upload date identified.
+- [x] Keep permissions to two roles: administrator and member. Admins manage accounts and all media; members upload and manage their own media.
+- [x] Enforce delete permissions so members cannot change other people’s media or accounts.
 
 **Done when:** every friend has an individual account, accounts can be disabled independently, and actions can be attributed to a person.
 

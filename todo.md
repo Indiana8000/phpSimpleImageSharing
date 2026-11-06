@@ -1,154 +1,153 @@
-# Picshare – Produktplan
+# phpSimpleImageSharing — Product plan
 
-Ziel: ein kleines, verlässliches privates Medienalbum für einen Freundeskreis, das auf gewöhnlichem PHP‑8.4-Webspace läuft und ohne laufende Dienste oder komplizierte Wartung auskommt.
+Goal: a small, reliable private media album for friends that runs on ordinary PHP 8.4 hosting without long-running services or complicated maintenance.
 
-## Leitplanken
+## Principles
 
-- Eine Installation, eine kleine Oberfläche, wenige Einstellungen.
-- Galerie und Originale bleiben hinter der Anmeldung. Freigaben sind bewusst erzeugte, widerrufbare Links mit klar gewähltem Ablauf.
-- PHP 8.4 mit PDO SQLite, HTTPS und ein Datenordner außerhalb des Webroots als Basis; keine Pflicht zu Node, Docker, Queue oder externem Dienst.
-- Erst Bilder und ein guter Alltagsablauf. Videos und weitere Dateitypen folgen über denselben Medienablauf, wenn Speicherplatz, Limits und Auslieferung geklärt sind.
-- Jede Funktion muss leicht verständlich, sicher betreibbar und auf Shared Hosting deploybar sein.
-- Die Oberfläche bleibt schlicht und flach, mit wenigen zurückhaltenden Farben und ohne dekorative Effekte.
+- One installation, a small interface, and few settings.
+- The gallery and original files stay behind sign-in. Shares are explicit, revocable links with a clear expiration.
+- PHP 8.4, PDO SQLite, HTTPS, and a data directory outside the web root; no Node, Docker, queue, or external service required.
+- Start with images and a good everyday workflow. Add video and other media through the same flow once storage limits and delivery are understood.
+- Keep every feature easy to understand, operate securely, and deploy on shared hosting.
+- Keep the interface simple and flat, with restrained colors and no decorative effects.
+- All interface text and project documentation use English. Display dates as `YYYY-MM-DD`.
 
-## Design-Leitbild
+## Design direction
 
-Gewählte Richtung: **C · Album** aus `design-varianten.html` — warmes, zurückhaltendes Farbschema, Serifenschrift für Seitentitel und größere Bildflächen.
+Chosen direction: **C · Album** from `design-directions.html` — warm, restrained colors, serif page headings, and larger image cards.
 
-- [ ] Helles und dunkles Farbschema mit CSS-Variablen umsetzen; beim ersten Besuch die Systemeinstellung (`prefers-color-scheme`) übernehmen.
-- [ ] Einen gut auffindbaren Hell/Dunkel/System-Umschalter anbieten und die manuelle Wahl lokal im Browser speichern.
-- [ ] Neutrale Flächen und Textfarben verwenden; eine einzige dezente Akzentfarbe für primäre Aktionen, Warnungen und Fehler sparsam einsetzen.
-- [ ] Flache Gestaltung ohne Verläufe, starke Schatten oder unnötige Rahmen; klare Abstände, einfache Typografie und wenige konsistente Komponenten.
-- [ ] Mobile zuerst gestalten: Upload, Link kopieren und Galerie müssen auf schmalen Bildschirmen ohne horizontales Scrollen funktionieren.
-- [ ] Tastaturbedienung, sichtbare Fokusmarkierung, ausreichende Kontraste in beiden Modi und verständliche Beschriftungen sicherstellen.
-- [ ] Zustände für Laden, leere Galerie, Upload-Fortschritt, Erfolg, Fehler und abgelaufene Freigaben visuell einheitlich definieren.
+- [ ] Implement light and dark themes with CSS variables; follow the system preference on first visit.
+- [ ] Provide an easy-to-find light/dark/system switch and save the manual choice in the browser.
+- [ ] Use neutral surfaces and text, with one subtle accent color for primary actions, warnings, and errors.
+- [ ] Use a flat visual style without gradients, strong shadows, or unnecessary borders; keep spacing, typography, and components consistent.
+- [ ] Design mobile-first: upload, copy-link, and gallery actions must work on narrow screens without horizontal scrolling.
+- [ ] Ensure keyboard access, visible focus, sufficient contrast in both themes, and clear labels.
+- [ ] Define consistent loading, empty-gallery, upload-progress, success, error, and expired-share states.
 
-**Fertig, wenn:** die Oberfläche in beiden Modi ruhig und gut lesbar bleibt und die häufigsten Aktionen auf dem Handy direkt erreichbar sind.
+**Done when:** both themes are calm and readable, and the common actions are easy to reach on a phone.
 
-## Beschlossene Speicherstruktur
+## Agreed storage layout
 
 ```text
 data_dir/
-  picshare.sqlite
+  phpSimpleImageSharing.sqlite
   users/
-    <interne-benutzer-id>/
-      <zufällige-medien-id>.<endung>
+    <internal-user-id>/
+      <random-media-id>.<extension>
   tmp/
 ```
 
-- [ ] SQLite speichert Benutzer, Medien-Metadaten, Freigabe-Token-Hashes und Ablaufzeiten; Mediendateien bleiben normale Dateien.
-- [ ] Für Ordnernamen eine unveränderliche zufällige interne Benutzer-ID verwenden, niemals Loginname oder Anzeigename.
-- [ ] Datenbank und Benutzerordner außerhalb des Webroots halten. Medien nur nach passender Berechtigungsprüfung durch PHP ausliefern.
-- [ ] Öffentliche Share-IDs und interne Medien-IDs getrennt und kryptografisch zufällig erzeugen; für gut teilbare URLs Crockford Base32 ohne Padding verwenden (128 Bit Zufall ergeben 26 Zeichen).
-- [ ] Keine Originaldateinamen oder echten Speicherpfade in URLs verwenden. Base32 ist nur eine kompakte Kodierung, kein Schutz durch Verschlüsselung.
-- [ ] SQLite-Journalmodus auf dem Hetzner-Webspace prüfen und bewusst festlegen; bei WAL müssen Datenbank und Journaldateien lokal auf demselben Host und Dateisystem liegen.
-- [ ] Schreibtransaktionen kurz halten, `busy_timeout` setzen und bei einer vorübergehenden Schreibsperre verständlich reagieren.
-- [ ] Backups umfassen die SQLite-Datenbank und alle Medienordner als konsistentes Set; Wiederherstellung gemeinsam dokumentieren.
+- [ ] Store users, media metadata, share-token hashes, and expiration times in SQLite; keep media as regular files.
+- [ ] Use a permanent random internal user ID for directory names, never a login or display name.
+- [ ] Keep the database and user directories outside the web root. Serve media through PHP only after checking authorization.
+- [ ] Check and choose the SQLite journal mode on the Hetzner host; in WAL mode, the database and journal files must be local to the same host and filesystem.
+- [ ] Keep write transactions short, set `busy_timeout`, and handle temporary write locks gracefully.
+- [ ] Back up the SQLite database and media directories as a consistent set; document restoring them together.
 
-## 0. Solide Grundlage
+## 0. Solid foundation
 
-- [ ] Projektstart vereinfachen: klare Setup-Schritte, Konfigurationsprüfung und verständliche Fehlermeldungen für PHP-Version, Erweiterungen, Schreibrechte, HTTPS und Upload-Limits.
-- [ ] Geheimnisse und private Daten absichern: `config.php`, Datenordner und Backups außerhalb des Webroots halten; Git-Ignore und Beispiele prüfen.
-- [ ] Anmeldung härten: Login-Versuche begrenzen, Sitzungs-Cookies vor dem Start korrekt setzen, Session-ID nach Anmeldung wechseln, Abmeldung und CSRF-Schutz konsistent halten.
-- [ ] Uploads sicher behandeln: Größenlimits serverseitig prüfen, Dateityp anhand des Inhalts ermitteln, fehlerhafte/überdimensionierte Bilder zurückweisen und Originalnamen nur als bereinigte Anzeige-Metadaten verwenden.
-- [ ] Einheitliche Fehlerbehandlung und Protokollierung einführen, ohne Passwörter, Session-IDs oder private Freigabetokens in Logs aufzunehmen.
-- [ ] Wartungsfunktionen ergänzen: Konfiguration und Speicherbedarf im Adminbereich anzeigen; Backup- und Wiederherstellungsanleitung dokumentieren.
+- [ ] Simplify first-time setup: clear instructions, configuration checks, and actionable errors for PHP version, extensions, permissions, HTTPS, and upload limits.
+- [ ] Protect secrets and private data: keep `config.php`, the data directory, and backups outside the web root; verify Git ignore rules and examples.
+- [ ] Harden sign-in: limit login attempts, set session cookies before starting the session, rotate the session ID after sign-in, and consistently enforce logout and CSRF protection.
+- [ ] Secure uploads: enforce size limits server-side, inspect actual file content, reject malformed or oversized images, and sanitize original names used as display metadata.
+- [ ] Use consistent error handling and logs without recording passwords, session IDs, or private share tokens.
+- [ ] Add maintenance information: show configuration and storage usage in the admin area; document backup and restore.
 
-**Fertig, wenn:** eine frische Installation sicher eingerichtet werden kann und typische Hosting-Fehler mit einer konkreten Lösung erklärt werden.
+**Done when:** a fresh install can be configured securely and common hosting problems come with a concrete fix.
 
-## 1. Angenehmer Upload-Alltag
+## 1. Comfortable uploads
 
-- [ ] Upload per Dateiauswahl und Drag-and-drop ermöglichen.
-- [ ] Mehrere Bilder in einem Vorgang hochladen; Fortschritt, Fehler und erfolgreiche Dateien einzeln anzeigen.
-- [ ] Bilder direkt nach dem Upload in der Galerie zeigen und nach Upload-Zeit sortieren.
-- [ ] Nach erfolgreichem Upload eine gut sichtbare Aktion „Link kopieren“ anbieten; Kopieren bestätigen und einen normalen Link als Fallback zeigen.
-- [ ] Vorschau vor dem Upload sowie verständliche Hinweise zu unterstützten Formaten und Größenlimit ergänzen.
-- [ ] Upload nach Abbruch oder Verbindungsfehler erneut versuchen können, ohne erfolgreiche Dateien doppelt hochzuladen.
+- [ ] Support file selection and drag-and-drop.
+- [ ] Upload multiple images at once and show progress, failures, and successes per file.
+- [ ] Add uploaded images to the gallery immediately and sort by upload time.
+- [ ] After upload, offer a clear “Copy link” action, confirm success, and show the link as a fallback.
+- [ ] Add an upload preview and clear guidance about supported formats and size limits.
+- [ ] Allow retrying after cancellation or connection errors without duplicating successful uploads.
 
-**Fertig, wenn:** ein Freund mehrere Bilder vom Handy oder Desktop hochladen und die Links ohne manuelles Markieren kopieren kann.
+**Done when:** a friend can upload several images from a phone or desktop and copy their links easily.
 
-## 2. Kleine, nützliche Galerie
+## 2. Useful, compact gallery
 
-- [ ] Responsive Rasteransicht mit Vorschaubildern, Ladezustand und Tastatur-bedienbarer Detailansicht bauen.
-- [ ] Detailansicht mit nächstem/vorherigem Bild, Original öffnen/herunterladen und Link kopieren.
-- [ ] Galerie nach neuestem/ältestem Upload sortieren; optional einfache Suche nach Dateiname anbieten.
-- [ ] Mehrfachauswahl mit wenigen Sammelaktionen: Links kopieren und ausgewählte Bilder löschen.
-- [ ] Löschdialog mit Dateiname und klarer Bestätigung; Erfolg oder Fehler sichtbar melden.
-- [ ] Leeren Zustand und Pagination oder „Mehr laden“ für größere Sammlungen ergänzen.
+- [ ] Build a responsive thumbnail grid with loading states and a keyboard-accessible detail view.
+- [ ] Add next/previous navigation, open/download original, and copy-link actions to the detail view.
+- [ ] Sort by newest/oldest upload; optionally add basic filename search.
+- [ ] Add multi-select with a few bulk actions: copy links and delete selected images.
+- [ ] Confirm deletion with the filename and show a clear success or error message.
+- [ ] Add an empty state and pagination or “Load more” for larger collections.
 
-**Fertig, wenn:** die Galerie mit einigen hundert Dateien übersichtlich bleibt und zentrale Aktionen mobil wie am Desktop erreichbar sind.
+**Done when:** the gallery stays clear with hundreds of files and key actions work on desktop and mobile.
 
-## 3. Freigaben, die verständlich und sicher sind
+## 3. Clear, secure sharing
 
-- [ ] Für einzelne Medien explizite Freigabelinks erzeugen; Galerie bleibt weiterhin nur nach Anmeldung sichtbar.
-- [ ] Einen neuen Link für ein Medium erzeugen können. Neuer Link ersetzt den bisherigen sofort (Token-Rotation); alte Links sind damit ungültig.
-- [ ] Kurze Freigabe-URL im Format `/s/<token>` verwenden; den Token-Hash in SQLite speichern und beim Aufruf sicher vergleichen.
-- [ ] Apache `mod_rewrite` nutzt wenige explizite Regeln, um `/s/<token>` und erlaubte Medienrouten an `index.php` weiterzugeben. PHP prüft weiterhin Anmeldung/Freigabe, Ablaufzeit und Medienberechtigung vor jeder Auslieferung.
-- [ ] Falls Medienrouten eine Endung tragen, nur ausdrücklich erlaubte Bild-/Video-Endungen matchen und mit dem Medientyp aus SQLite abgleichen; nie einen URL-Parameter als Dateipfad verwenden.
-- [ ] Freigabeoptionen minimal halten: Link deaktivieren/löschen und optional Ablaufdatum setzen.
-- [ ] Freigabe-Token kryptografisch zufällig erzeugen und getrennt von Dateinamen speichern; Tokens nie in Logs oder Fehlermeldungen ausgeben.
-- [ ] Teilen-Ansicht ohne Anmeldung nur für genau das freigegebene Medium zugänglich machen; keine Galerie, Dateiliste oder Metadaten anderer Medien offenlegen.
-- [ ] Unbekannte, widerrufene oder abgelaufene Share-Links auf das vom Betreiber gewählte Rickroll-YouTube-Video weiterleiten. Diese Weiterleitung nur für Share-Link-Aufrufe verwenden; Login, Galerie und normale Fehler bleiben davon unberührt.
+- [ ] Create explicit share links for individual media; keep the gallery sign-in-only.
+- [ ] Allow generating a new link for a media item. The new link immediately replaces the old one (token rotation).
+- [ ] Use short share URLs in the form `/s/<token>`; store token hashes in SQLite and compare them safely on access.
+- [ ] Use a small number of explicit Apache `mod_rewrite` rules to route `/s/<token>` and allowed media routes to `index.php`. PHP must still check sign-in/share status, expiration, and media permissions before serving anything.
+- [ ] If media routes include extensions, match only explicitly allowed image/video extensions and compare them with the media type in SQLite; never use a URL parameter as a file path.
+- [ ] Keep share options minimal: revoke a link and optionally set an expiration date.
+- [ ] Generate share tokens cryptographically at random and store them separately from filenames; never log tokens or include them in errors.
+- [ ] Allow an unauthenticated share page to access only its specific media item; never reveal the gallery, other files, or unrelated metadata.
+- [ ] Redirect unknown, revoked, or expired share links to the operator-selected Rickroll YouTube video. Apply this only to share-link requests, not sign-in, gallery, or ordinary media errors.
 
-**Fertig, wenn:** ein Link gezielt geteilt, neu erzeugt, optional befristet und jederzeit widerrufen werden kann, ohne den privaten Galeriezugriff zu öffnen.
+**Done when:** a link can be shared, regenerated, optionally expired, and revoked without exposing the private gallery.
 
-## 4. Eigene Konten für Freunde
+## 4. Individual accounts for friends
 
-- [ ] Gemeinsames Passwort durch individuelle Benutzerkonten ersetzen; jeder Freund erhält ein eigenes Login.
-- [ ] Einfache Admin-Funktionen ergänzen: Benutzer anlegen, deaktivieren und Passwort zurücksetzen; öffentliche Selbstregistrierung standardmäßig ausschalten.
-- [ ] Passwort-Hashes mit PHP `password_hash` speichern, Login-Versuche begrenzen und Sessions bei Kontowechsel/Deaktivierung widerrufen.
-- [ ] In der Galerie standardmäßig alle privaten Medien der Gruppe zeigen; Ersteller und Upload-Zeit sichtbar zuordnen.
-- [ ] Nur zwei einfache Berechtigungen vorsehen: Administrator und Mitglied. Administratoren verwalten Konten und alle Medien; Mitglieder laden hoch und verwalten ihre eigenen Medien.
-- [ ] Lösch- und Freigaberechte eindeutig durchsetzen, damit Mitglieder keine fremden Medien oder Konten verändern können.
+- [ ] Replace the shared password with individual user accounts.
+- [ ] Add simple admin actions: create, disable, and reset accounts; keep public self-registration off by default.
+- [ ] Store password hashes with PHP `password_hash`, limit login attempts, and revoke sessions when an account is switched or disabled.
+- [ ] Show all private group media in the gallery, with the uploader and upload date identified.
+- [ ] Keep permissions to two roles: administrator and member. Admins manage accounts and all media; members upload and manage their own media.
+- [ ] Enforce delete and share permissions so members cannot change other people’s media or accounts.
 
-**Fertig, wenn:** jeder Freund ein eigenes Konto hat, Konten einzeln gesperrt werden können und Aktionen einer Person zugeordnet sind.
+**Done when:** every friend has an individual account, accounts can be disabled independently, and actions can be attributed to a person.
 
-## 5. Automatisches Löschen
+## 5. Automatic deletion
 
-- [ ] Beim Upload eine optionale Aufbewahrungsdauer anbieten, zum Beispiel „nie“, 1 Tag, 7 Tage, 30 Tage oder ein eigenes Datum.
-- [ ] Ablaufzeit serverseitig speichern und vor Anzeige sowie Auslieferung abgelaufene Medien konsequent sperren.
-- [ ] Abgelaufene Datei und Metadaten automatisch entfernen; auf Hosting ohne Cron regelmäßig beim Seitenaufruf in kleinen, begrenzten Schritten aufräumen.
-- [ ] Optional dokumentieren, wie ein Hoster-Cronjob denselben Aufräumvorgang regelmäßig ausführt.
-- [ ] Ablaufzeit in Galerie und Detailansicht anzeigen und für berechtigte Benutzer änderbar machen.
-- [ ] Klären und dokumentieren, dass Löschung aus Picshare keine externen Kopien oder Backups entfernt; Backups müssen eine eigene Aufbewahrungsfrist haben.
+- [ ] Let the uploader choose an optional retention period, for example “never”, 1 day, 7 days, 30 days, or a custom date.
+- [ ] Store the expiration time server-side and prevent expired media from appearing or being served.
+- [ ] Automatically remove expired files and metadata; on hosting without cron, perform small, bounded cleanup steps on page requests.
+- [ ] Optionally document a host cron job that runs the same cleanup task regularly.
+- [ ] Show the expiration date in the gallery and detail view and let authorized users change it.
+- [ ] Explain that deleting from phpSimpleImageSharing does not remove external copies or backups; backups need a separate retention period.
 
-**Fertig, wenn:** ein Medium nach seiner festgelegten Frist nicht mehr abrufbar ist und zeitnah auch aus dem aktiven Speicher entfernt wird, unabhängig davon, ob Cron verfügbar ist.
+**Done when:** media becomes inaccessible at its chosen expiration and is removed from active storage soon afterward, with or without cron.
 
-## 6. Betrieb auf einfachem Webspace
+## 6. Simple shared-hosting operations
 
-- [ ] Installation als kurze Checkliste dokumentieren: Dateien hochladen, Datenordner anlegen, Konfiguration setzen, HTTPS aktivieren.
-- [ ] Setup-Seite oder Kommandozeilenfreiheit für Hoster berücksichtigen; notwendige Werte ohne SSH direkt in der Konfigurationsdatei setzen können.
-- [ ] Upload-Limits mit `upload_max_filesize`, `post_max_size`, Laufzeit und verfügbarem Speicherplatz abgleichen und konkret erklären.
-- [ ] Export/Backup und Wiederherstellung mit Dateien plus Metadaten beschreiben; optional einfacher ZIP-Export nur für Administratoren.
-- [ ] Upgrade-Hinweise und sichere Standardwerte festlegen; Konfigurationsbeispiele bei neuen Optionen synchron halten.
-- [ ] GitHub-Veröffentlichung vorbereiten: verständliche README, MIT-Lizenz, Screenshots, Versionshinweise und Issues-Vorlage für Fehlerberichte.
+- [ ] Document installation as a short checklist: upload files, create the data directory, configure settings, enable HTTPS.
+- [ ] Support hosts without shell access; required values should be configurable in a file.
+- [ ] Explain how `upload_max_filesize`, `post_max_size`, execution time, and available disk space affect uploads.
+- [ ] Document backup and restore for media plus metadata; optionally offer a simple admin-only ZIP export.
+- [ ] Document upgrades and safe defaults; keep configuration examples in sync when options change.
+- [ ] Prepare the GitHub release with a clear README, MIT license, screenshots, release notes, and an issue template.
 
-**Fertig, wenn:** eine technisch interessierte Person die Anwendung auf PHP-Webspace ohne separaten Datenbankserver installieren und im Fehlerfall wiederherstellen kann.
+**Done when:** a technically curious person can install phpSimpleImageSharing on PHP hosting without a separate database server and restore it if needed.
 
-## 7. Medien erweitern – erst nach stabilen Bildern
+## 7. Add media types after images are stable
 
-- [ ] Medien-Metadaten und Auslieferung so strukturieren, dass Typ, Größe, Dauer und Vorschaubild später ergänzt werden können, ohne die Galerie neu zu bauen.
-- [ ] Vor Videos Limits für Dateigröße, Speicherverbrauch und unterstützte Container festlegen; keine serverseitige Transkodierung voraussetzen.
-- [ ] Video-Upload und Browser-Wiedergabe ergänzen; HTTP-Range-Auslieferung für zuverlässiges Springen prüfen.
-- [ ] Nicht unterstützte Formate als Download anbieten oder beim Upload verständlich zurückweisen.
-- [ ] Speicherverbrauch je Medium und insgesamt anzeigen; einfacher Ablauf zur manuellen Bereinigung.
+- [ ] Structure media metadata and delivery so type, size, duration, and thumbnails can be added without rebuilding the gallery.
+- [ ] Set file-size, storage, and supported-container limits before adding video; do not require server-side transcoding.
+- [ ] Add video upload and browser playback; check HTTP Range delivery for reliable seeking.
+- [ ] Offer unsupported formats as downloads or reject them with a clear explanation.
+- [ ] Show storage use per item and in total; provide a simple cleanup workflow.
 
-**Fertig, wenn:** ein Video innerhalb klarer Hosting-Limits hochgeladen und im Browser abgespielt oder eindeutig als Download bereitgestellt werden kann.
+**Done when:** a video can be uploaded within clear hosting limits and played in the browser or clearly offered as a download.
 
-## Reihenfolge für die erste nützliche Version
+## First useful release sequence
 
-1. **Grundlage:** Setup-Prüfung, Upload-Sicherheit und individuelles Login.
-2. **Konten:** Admin kann Freunde anlegen, sperren und Passwörter zurücksetzen.
-3. **Komfort:** Mehrfach-Upload mit Fortschritt und Link kopieren.
-4. **Galerie:** Detailansicht, Sortierung, Suche und sichere Sammelaktionen.
-5. **Freigaben:** neue Links erzeugen, alte Links ungültig machen, Ablaufdatum setzen und Rickroll-Weiterleitung für ungültige Share-Links.
-6. **Aufbewahrung:** wählbare Löschfrist plus Aufräumen ohne dauerhaften Hintergrunddienst.
-7. **Webspace-Betrieb:** Backup, Wiederherstellung und klare Upgrade-Anleitung.
-8. **Videos:** erst nach echten Tests auf dem Zielhosting.
+1. **Foundation:** setup checks, upload security, and individual sign-in.
+2. **Accounts:** admins can create, disable, and reset friend accounts.
+3. **Comfort:** multi-upload with progress and copy-link.
+4. **Gallery:** detail view, sorting, search, and safe bulk actions.
+5. **Sharing:** generate new links, invalidate old links, set expiration, and redirect invalid share links.
+6. **Retention:** selectable expiration and cleanup without a permanent background service.
+7. **Hosting:** backup, restore, and clear upgrade instructions.
+8. **Video:** only after testing on the target host.
 
-## Bewusst nicht Teil der ersten Version
+## Explicitly out of scope for the first version
 
-- Kommentare, Likes, öffentliche Profile oder eine öffentliche Entdecken-Seite.
-- Föderation, Cloud-Synchronisierung, mobile Apps oder externe Bild-CDNs.
-- Automatische Videokonvertierung, KI-Funktionen oder umfangreiche Rollenverwaltung.
-- Komplexer Docker-Deploy für gewöhnlichen Webspace.
+- Comments, likes, public profiles, or a public discovery page.
+- Federation, cloud sync, mobile apps, or external image CDNs.
+- Automatic video conversion, AI features, or extensive role management.
+- A complex Docker deployment for ordinary shared hosting.

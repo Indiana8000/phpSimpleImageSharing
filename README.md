@@ -1,25 +1,25 @@
-# Picshare
+# phpSimpleImageSharing
 
-Kleines, passwortgeschütztes Image Sharing für PHP 8.4 und einfaches Webhosting. Uploads und Galerie sind nur nach Anmeldung sichtbar. Freigabelinks funktionieren ebenfalls nur für angemeldete Nutzer.
+A small, password-protected image-sharing app for PHP 8.4 and basic web hosting. The gallery and image links require sign-in.
 
-## Anforderungen
+## Requirements
 
-- PHP 8.4 mit den Erweiterungen `fileinfo` und `session`
-- Webserver mit HTTPS
-- Ein beschreibbarer Datenordner **außerhalb** des öffentlichen Webroots
+- PHP 8.4 with the `fileinfo` and `session` extensions
+- HTTPS
+- A writable data directory **outside** the public web root
 
 ## Installation
 
-1. Lade den Inhalt dieses Repositories in ein Verzeichnis, das dein Hoster mit PHP 8.4 ausführt.
-2. Lege außerhalb dieses öffentlichen Verzeichnisses einen Ordner für Bilder an, zum Beispiel `~/private/picshare-data`, und gib dem PHP-Prozess Schreibrechte.
-3. Kopiere `config.example.php` nach `config.php`. Trage in `data_dir` den absoluten Pfad des Datenordners ein.
-4. Erzeuge lokal einen Passwort-Hash mit `php -r "echo password_hash('DEIN_LANGES_PASSWORT', PASSWORD_DEFAULT), PHP_EOL;"` und trage ihn in `password_hash` ein. Verwende ein langes, einzigartiges Passwort.
-5. Öffne die Website über HTTPS und melde dich mit dem zugehörigen Passwort an.
+1. Upload this repository to a directory served by your host with PHP 8.4 enabled.
+2. Create a directory for media outside the public web root, for example `~/private/phpSimpleImageSharing-data`, and grant the PHP process write access.
+3. Copy `config.example.php` to `config.php` and set `data_dir` to the absolute path of that directory.
+4. Generate a password hash locally with `php -r "echo password_hash('YOUR_LONG_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"` and set `password_hash` in `config.php`. Use a long, unique password.
+5. Open the website over HTTPS and sign in with that password.
 
-`config.php` wird von Git ignoriert und darf nicht veröffentlicht werden. Falls dein Hoster keinen Speicher außerhalb des Webroots erlaubt, setze dich mit dessen Support in Verbindung; direkte Webzugriffe auf Uploads müssen zuverlässig gesperrt sein. Die Anwendung liefert Bilder nur über einen authentifizierten PHP-Endpunkt aus.
+`config.php` is ignored by Git and must not be published. If your host does not allow storage outside the web root, contact its support; direct web access to uploaded files must be reliably blocked. phpSimpleImageSharing serves images only through an authenticated PHP endpoint.
 
-## Betrieb
+## Usage and maintenance
 
-Unterstützt werden JPEG, PNG, GIF und WebP. Standardmäßig sind Uploads auf 12 MiB begrenzt. Das PHP-Limit `upload_max_filesize` und `post_max_size` muss mindestens so hoch sein wie der eingestellte Wert. Größere Dateien oder Videos sind derzeit absichtlich nicht aktiviert.
+JPEG, PNG, GIF, and WebP are supported. Uploads are limited to 12 MiB by default. The PHP `upload_max_filesize` and `post_max_size` limits must be at least as large as the configured phpSimpleImageSharing limit. Larger files and videos are not enabled yet.
 
-Setze regelmäßig Sicherheitsupdates für PHP und den Webserver ein. Lege Backups des Datenordners an; darin liegen sowohl die Bilder als auch deren Metadaten. Wer das gemeinsame Passwort kennt, kann alle Bilder ansehen, hochladen und löschen. Teile es daher nur mit den gewünschten Personen.
+Keep PHP and the web server updated. Back up the data directory; it contains images and metadata. Anyone who knows the shared password can view, upload, and delete all images, so only share it with trusted people.

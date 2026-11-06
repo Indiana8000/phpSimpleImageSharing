@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="de" data-theme="light">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Picshare · Designvarianten</title>
+  <title>phpSimpleImageSharing · Design directions</title>
   <style>
     :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:light dark;--page:#f2f3f5;--paper:#fff;--text:#20242b;--muted:#69717d;--line:#e2e5e9;--soft:#f6f7f8;--shadow:0 12px 32px rgba(25,32,44,.08);--radius:15px}
     html[data-theme="dark"]{--page:#15171a;--paper:#1e2125;--text:#eff1f4;--muted:#a2a9b3;--line:#353a41;--soft:#25292e;--shadow:0 14px 34px rgba(0,0,0,.22)}
@@ -31,81 +31,82 @@
     @media(max-width:520px){.page{padding:20px 12px 32px}.intro{display:block}.theme{margin-top:14px}.option-head{padding:15px}.mock-content{padding:12px}.scene{height:92px}.variant-b .scene{height:82px}.variant-c .scene{height:105px}.app-links{gap:8px}.app-links span:last-child{display:none}.profile .profile-name{display:none}.compare-note{display:block;line-height:1.5}}
     @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
   </style>
+  <style>@media(max-width:520px){.app-links{display:none}.brand{font-size:11px;letter-spacing:-.05em}}</style>
 </head>
 <body>
   <main class="page">
     <header class="intro">
-      <div><div class="eyebrow">Picshare · Designrichtung</div><h1>Drei ruhige Ansätze.</h1><p>Gleiche Funktionen, andere Stimmung und Anordnung. Wähle den Entwurf, der sich für euren privaten Fotoaustausch am richtigsten anfühlt.</p></div>
-      <button class="theme" id="themeToggle" type="button" aria-label="Farbschema wechseln">☾ <span>Zum dunklen Modus</span></button>
+      <div><div class="eyebrow">phpSimpleImageSharing · Design direction</div><h1>Three quiet directions.</h1><p>Same features, different mood and layout. Choose the design that feels right for sharing photos with friends.</p></div>
+      <button class="theme" id="themeToggle" type="button" aria-label="Change color theme">☾ <span>Switch to dark mode</span></button>
     </header>
 
     <section class="options" aria-label="Designvarianten">
       <article class="option variant-a" data-option="a" style="--accent:#507cab">
-        <header class="option-head"><div><h2>01 · Klar</h2><p>Hell, luftig und direkt. Klassische Galerie mit viel Platz.</p></div><span class="option-label">A</span></header>
+        <header class="option-head"><div><h2>01 · Clear</h2><p>Bright, airy, and direct. A classic gallery with room to breathe.</p></div><span class="option-label">A</span></header>
         <div class="preview">
-          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Galerie</span><span>Freigaben</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>phpSimpleImageSharing</div><nav class="app-links"><span class="active">Gallery</span><span>Shares</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
           <div class="mock-content">
-            <div class="welcome"><div><h3>Deine Galerie</h3><p>Alle gemeinsamen Erinnerungen an einem Ort.</p></div><button class="btn">＋ Hochladen</button></div>
-            <div class="drop"><span class="upload-icon">↑</span><div><strong>Bilder hier ablegen</strong><small>oder Dateien auswählen · bis 20 MB pro Bild</small><div class="progress"><span>3 von 4 Bildern</span><span class="track"><i></i></span><span>68%</span></div></div></div>
-            <div class="toolbar"><div class="tabs"><b>Alle Bilder</b><span>Meine Uploads</span></div><div class="tools"><span class="search">⌕ &nbsp;Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="welcome"><div><h3>Your gallery</h3><p>Shared memories, all in one place.</p></div><button class="btn">＋ Upload</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>Drop images here</strong><small>or choose files · up to 20 MB each</small><div class="progress"><span>3 of 4 images</span><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>All images</b><span>My uploads</span></div><div class="tools"><span class="search">⌕ &nbsp;Search</span><span class="sort">Newest⌄</span></div></div>
             <div class="gallery">
-              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">Link kopieren</span></div></div></div>
-              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
-              <div class="photo"><div class="scene city"><span>Abendrunde</span></div><div class="photo-meta"><div class="file">abend.png</div><div class="meta-row"><span>Di. · Alex</span><span class="share-pill">Freigegeben</span></div></div></div>
-            </div><div class="foot"><span>12 Bilder</span><span>Speicher: 248 MB</span></div>
+              <div class="photo"><div class="scene coast"><span>Sunday by the sea</span></div><div class="photo-meta"><div class="file">beach.jpg</div><div class="meta-row"><span>2026-11-06 · Alex</span><span class="share-pill">Copy link</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Weekend trip</span></div><div class="photo-meta"><div class="file">mountain.webp</div><div class="meta-row"><span>2026-11-05 · Mia</span><span>7 days</span></div></div></div>
+              <div class="photo"><div class="scene city"><span>Evening walk</span></div><div class="photo-meta"><div class="file">evening.png</div><div class="meta-row"><span>2026-11-04 · Alex</span><span class="share-pill">Shared</span></div></div></div>
+            </div><div class="foot"><span>12 images</span><span>Storage: 248 MB</span></div>
           </div>
         </div>
-        <footer class="option-foot"><div class="swatches"><i style="--sw:#507cab"></i><i style="--sw:#eef1f4"></i><i style="--sw:#30343a"></i></div><button class="pick" type="button">A auswählen</button></footer>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#507cab"></i><i style="--sw:#eef1f4"></i><i style="--sw:#30343a"></i></div><button class="pick" type="button">Choose A</button></footer>
       </article>
 
       <article class="option variant-b" data-option="b" style="--accent:#397b6d">
-        <header class="option-head"><div><h2>02 · Kompakt</h2><p>Etwas dichter und werkzeugorientiert. Akzent in ruhigem Grün.</p></div><span class="option-label">B</span></header>
+        <header class="option-head"><div><h2>02 · Compact</h2><p>More compact and tool-focused, with a calm green accent.</p></div><span class="option-label">B</span></header>
         <div class="preview">
-          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Bilder</span><span>Geteilt</span><span>Personen</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>phpSimpleImageSharing</div><nav class="app-links"><span class="active">Images</span><span>Shared</span><span>People</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
           <div class="mock-content">
-            <div class="welcome"><div><h3>Alle Bilder <span style="font-size:10px;color:var(--sub);font-weight:500">12</span></h3><p>Gemeinsam geteilt · zuletzt aktualisiert eben</p></div><button class="btn">＋ Upload</button></div>
-            <div class="drop"><span class="upload-icon">↑</span><div><strong>3 Dateien werden hochgeladen</strong><small>strand.jpg · berge.jpg · wald.jpg</small><div class="progress"><span class="track"><i></i></span><span>68%</span></div></div></div>
-            <div class="toolbar"><div class="tabs"><b>Alle</b><span>Meine</span><span>Freigegeben</span></div><div class="tools"><span class="search">⌕ Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="welcome"><div><h3>All images <span style="font-size:10px;color:var(--sub);font-weight:500">12</span></h3><p>Shared with your group · updated just now</p></div><button class="btn">＋ Upload</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>3 files uploading</strong><small>beach.jpg · hills.jpg · woods.jpg</small><div class="progress"><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>All</b><span>Mine</span><span>Shared</span></div><div class="tools"><span class="search">⌕ Search</span><span class="sort">Newest⌄</span></div></div>
             <div class="gallery">
-              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">↗ Kopieren</span></div></div></div>
-              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
-              <div class="photo"><div class="scene forest"><span>Am Waldsee</span></div><div class="photo-meta"><div class="file">wald.png</div><div class="meta-row"><span>Mo. · Ben</span><span class="share-pill">Freigegeben</span></div></div></div>
-            </div><div class="foot"><span>12 Elemente · 3 Mitglieder</span><span>248 MB</span></div>
+              <div class="photo"><div class="scene coast"><span>Sunday by the sea</span></div><div class="photo-meta"><div class="file">beach.jpg</div><div class="meta-row"><span>2026-11-06 · Alex</span><span class="share-pill">↗ Copy</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Weekend trip</span></div><div class="photo-meta"><div class="file">mountain.webp</div><div class="meta-row"><span>2026-11-05 · Mia</span><span>7 days</span></div></div></div>
+              <div class="photo"><div class="scene forest"><span>By the lake</span></div><div class="photo-meta"><div class="file">woods.png</div><div class="meta-row"><span>2026-11-03 · Ben</span><span class="share-pill">Shared</span></div></div></div>
+            </div><div class="foot"><span>12 items · 3 members</span><span>248 MB</span></div>
           </div>
         </div>
-        <footer class="option-foot"><div class="swatches"><i style="--sw:#397b6d"></i><i style="--sw:#edf2ef"></i><i style="--sw:#24292e"></i></div><button class="pick" type="button">B auswählen</button></footer>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#397b6d"></i><i style="--sw:#edf2ef"></i><i style="--sw:#24292e"></i></div><button class="pick" type="button">Choose B</button></footer>
       </article>
 
       <article class="option variant-c" data-option="c" style="--accent:#ae7056">
-        <header class="option-head"><div><h2>03 · Album</h2><p>Ein wenig wärmer und persönlicher. Fotos stehen stärker im Mittelpunkt.</p></div><span class="option-label">C</span></header>
+        <header class="option-head"><div><h2>03 · Album</h2><p>A little warmer and more personal. The photos take center stage.</p></div><span class="option-label">C</span></header>
         <div class="preview">
-          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Sammlung</span><span>Freigabelinks</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>phpSimpleImageSharing</div><nav class="app-links"><span class="active">Album</span><span>Share links</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
           <div class="mock-content">
-            <div class="welcome"><div><h3>Unsere Momente</h3><p>Eine kleine Sammlung von uns allen.</p></div><button class="btn">＋ Bilder</button></div>
-            <div class="drop"><span class="upload-icon">↑</span><div><strong>Fotos hinzufügen</strong><small>Hier ablegen oder vom Gerät auswählen</small><div class="progress"><span>Wird hochgeladen</span><span class="track"><i></i></span><span>68%</span></div></div></div>
-            <div class="toolbar"><div class="tabs"><b>Alle Fotos</b><span>Von mir</span></div><div class="tools"><span class="search">⌕ Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="welcome"><div><h3>Our moments</h3><p>A small collection of memories from all of us.</p></div><button class="btn">＋ Add photos</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>Add photos</strong><small>Drop them here or choose files from your device</small><div class="progress"><span>Uploading</span><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>All photos</b><span>By me</span></div><div class="tools"><span class="search">⌕ Search</span><span class="sort">Newest⌄</span></div></div>
             <div class="gallery">
-              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">Link kopieren</span></div></div></div>
-              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
-              <div class="photo"><div class="scene city"><span>Abendrunde</span></div><div class="photo-meta"><div class="file">abend.png</div><div class="meta-row"><span>Di. · Alex</span><span class="share-pill">Geteilt</span></div></div></div>
-            </div><div class="foot"><span>12 Erinnerungen</span><span>Automatisch löschen: 30 Tage</span></div>
+              <div class="photo"><div class="scene coast"><span>Sunday by the sea</span></div><div class="photo-meta"><div class="file">beach.jpg</div><div class="meta-row"><span>2026-11-06 · Alex</span><span class="share-pill">Copy link</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Weekend trip</span></div><div class="photo-meta"><div class="file">mountain.webp</div><div class="meta-row"><span>2026-11-05 · Mia</span><span>7 days</span></div></div></div>
+              <div class="photo"><div class="scene city"><span>Evening walk</span></div><div class="photo-meta"><div class="file">evening.png</div><div class="meta-row"><span>2026-11-04 · Alex</span><span class="share-pill">Shared</span></div></div></div>
+            </div><div class="foot"><span>12 memories</span><span>Auto-delete: 30 days</span></div>
           </div>
         </div>
-        <footer class="option-foot"><div class="swatches"><i style="--sw:#ae7056"></i><i style="--sw:#f7f3ec"></i><i style="--sw:#34322f"></i></div><button class="pick" type="button">C auswählen</button></footer>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#ae7056"></i><i style="--sw:#f7f3ec"></i><i style="--sw:#34322f"></i></div><button class="pick" type="button">Choose C</button></footer>
       </article>
     </section>
-    <p class="compare-note"><span>Die Vorschauen sind responsive. Der Modus-Schalter oben ändert alle drei Entwürfe.</span><span id="choice" aria-live="polite">Noch keine Variante ausgewählt</span></p>
+    <p class="compare-note"><span>The previews are responsive. The theme switch changes all three concepts.</span><span id="choice" aria-live="polite">No concept selected</span></p>
   </main>
   <script>
     const root = document.documentElement;
     const themeButton = document.getElementById('themeToggle');
-    const savedTheme = localStorage.getItem('picshare-design-theme');
+    const savedTheme = localStorage.getItem('phpSimpleImageSharing-design-theme');
     let theme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-    function applyTheme(){root.dataset.theme=theme;themeButton.innerHTML=theme==='light'?'☾ <span>Zum dunklen Modus</span>':'☀ <span>Zum hellen Modus</span>';themeButton.setAttribute('aria-label',theme==='light'?'Dunklen Modus aktivieren':'Hellen Modus aktivieren')}
+    function applyTheme(){root.dataset.theme=theme;themeButton.innerHTML=theme==='light'?'☾ <span>Switch to dark mode</span>':'☀ <span>Switch to light mode</span>';themeButton.setAttribute('aria-label',theme==='light'?'Enable dark mode':'Enable light mode')}
     applyTheme();
-    themeButton.addEventListener('click',()=>{theme=theme==='light'?'dark':'light';localStorage.setItem('picshare-design-theme',theme);applyTheme()});
-    const labels={a:'Klar',b:'Kompakt',c:'Album'};
-    document.querySelectorAll('.pick').forEach(button=>button.addEventListener('click',()=>{const option=button.closest('.option');document.querySelectorAll('.option').forEach(item=>{item.classList.remove('chosen');item.querySelector('.pick').setAttribute('aria-pressed','false')});option.classList.add('chosen');button.setAttribute('aria-pressed','true');document.getElementById('choice').textContent='Ausgewählt: '+labels[option.dataset.option]}));
+    themeButton.addEventListener('click',()=>{theme=theme==='light'?'dark':'light';localStorage.setItem('phpSimpleImageSharing-design-theme',theme);applyTheme()});
+    const labels={a:'Clear',b:'Compact',c:'Album'};
+    document.querySelectorAll('.pick').forEach(button=>button.addEventListener('click',()=>{const option=button.closest('.option');document.querySelectorAll('.option').forEach(item=>{item.classList.remove('chosen');item.querySelector('.pick').setAttribute('aria-pressed','false')});option.classList.add('chosen');button.setAttribute('aria-pressed','true');document.getElementById('choice').textContent='Selected: '+labels[option.dataset.option]}));
   </script>
 </body>
 </html>

@@ -21,8 +21,8 @@ Chosen direction: **C · Album** from `design-directions.html` — warm, restrai
 - [x] Use neutral surfaces and text, with one subtle accent color for primary actions, warnings, and errors.
 - [x] Use a flat visual style without gradients, strong shadows, or unnecessary borders; keep spacing, typography, and components consistent.
 - [x] Design mobile-first: upload, copy-link, and gallery actions must work on narrow screens without horizontal scrolling.
-- [ ] Ensure keyboard access, visible focus, sufficient contrast in both themes, and clear labels.
-- [ ] Define consistent loading, empty-gallery, upload-progress, success, error, and expired-share states.
+- [x] Ensure keyboard access, visible focus, sufficient contrast in both themes, and clear labels.
+- [x] Define consistent loading, empty-gallery, upload-progress, success, error, and expired-share states.
 
 **Done when:** both themes are calm and readable, and the common actions are easy to reach on a phone.
 

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Picshare · Designvarianten</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color-scheme:light dark;--page:#f2f3f5;--paper:#fff;--text:#20242b;--muted:#69717d;--line:#e2e5e9;--soft:#f6f7f8;--shadow:0 12px 32px rgba(25,32,44,.08);--radius:15px}
+    html[data-theme="dark"]{--page:#15171a;--paper:#1e2125;--text:#eff1f4;--muted:#a2a9b3;--line:#353a41;--soft:#25292e;--shadow:0 14px 34px rgba(0,0,0,.22)}
+    *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--text);transition:background .2s,color .2s}button,input{font:inherit}button{cursor:pointer}a{color:inherit}
+    .page{max-width:1500px;margin:auto;padding:30px clamp(18px,3vw,48px) 54px}.intro{display:flex;justify-content:space-between;align-items:flex-start;gap:22px;margin:0 auto 24px;max-width:1120px}.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:750}.intro h1{font-size:clamp(27px,3vw,38px);letter-spacing:-.045em;margin:6px 0 8px}.intro p{margin:0;color:var(--muted);max-width:680px;line-height:1.55}.theme{flex:none;border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:999px;padding:9px 13px;font-size:13px;font-weight:650;box-shadow:0 2px 8px rgba(0,0,0,.03)}
+    .options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:19px;max-width:1370px;margin:0 auto}.option{min-width:0;border:1px solid var(--line);border-radius:20px;background:var(--paper);box-shadow:var(--shadow);overflow:hidden;transition:border-color .18s,transform .18s}.option:hover{transform:translateY(-2px)}.option.chosen{border:2px solid var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 12%,transparent),var(--shadow)}
+    .option-head{padding:18px 18px 13px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.option-head h2{font-size:17px;letter-spacing:-.025em;margin:0 0 4px}.option-head p{font-size:12px;color:var(--muted);line-height:1.4;margin:0;min-height:34px}.option-label{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:var(--soft);color:var(--muted);height:28px;min-width:28px;font-size:12px;font-weight:750}.preview{margin:0 11px;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface);color:var(--ink);--surface:#fff;--ink:#252a31;--sub:#707984;--rule:#e7e9ec;--quiet:#f6f7f8;--accent:#4578b8;--accent-ink:white;--tint:#edf3fa;--surface-2:#fff}
+    html[data-theme="dark"] .preview{--surface:#202328;--ink:#f1f2f4;--sub:#a6adb6;--rule:#363b42;--quiet:#282c31;--surface-2:#25292e}
+    .appbar{height:45px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--rule);background:var(--surface-2)}.brand{font-weight:780;letter-spacing:-.035em;font-size:13px;display:flex;align-items:center;gap:7px}.brand-mark{width:18px;height:18px;border-radius:6px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-size:10px}.app-links{display:flex;gap:14px;color:var(--sub);font-size:9px}.app-links .active{color:var(--ink);font-weight:700}.profile{font-size:9px;color:var(--sub);display:flex;align-items:center;gap:5px}.avatar{width:19px;height:19px;border-radius:50%;background:var(--tint);color:var(--accent);display:grid;place-items:center;font-size:8px;font-weight:750}
+    .mock-content{padding:15px 14px 13px}.welcome{display:flex;justify-content:space-between;gap:8px;align-items:start;margin-bottom:12px}.welcome h3{font-size:17px;letter-spacing:-.04em;margin:0}.welcome p{font-size:9px;color:var(--sub);margin:3px 0 0}.btn{border:0;border-radius:7px;padding:7px 10px;color:var(--accent-ink);background:var(--accent);font-size:9px;font-weight:700;white-space:nowrap}.btn.secondary{background:var(--quiet);color:var(--ink);border:1px solid var(--rule)}
+    .drop{min-height:75px;border:1px dashed color-mix(in srgb,var(--accent) 42%,var(--rule));background:var(--tint);border-radius:10px;display:flex;align-items:center;justify-content:center;gap:9px;text-align:left;margin-bottom:11px}.upload-icon{width:28px;height:28px;border-radius:8px;background:var(--surface);display:grid;place-items:center;color:var(--accent);font-size:15px}.drop strong{display:block;font-size:10px}.drop small{display:block;color:var(--sub);font-size:8px;margin-top:2px}.progress{display:flex;align-items:center;gap:7px;margin-top:5px;font-size:8px;color:var(--sub)}.track{height:3px;border-radius:9px;background:var(--rule);flex:1;overflow:hidden}.track i{display:block;width:68%;height:100%;background:var(--accent);border-radius:9px}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:7px;margin:13px 0 8px}.tabs{display:flex;gap:10px;font-size:9px;color:var(--sub)}.tabs b{color:var(--ink);font-weight:700}.tools{display:flex;gap:5px}.search,.sort{height:24px;border:1px solid var(--rule);border-radius:6px;background:var(--surface-2);color:var(--sub);font-size:8px;padding:0 7px;display:flex;align-items:center}.search{width:83px}.sort{white-space:nowrap}
+    .gallery{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.photo{min-width:0;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--surface-2)}.scene{height:79px;position:relative;overflow:hidden;background:#c6d7dc}.scene:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 56%,rgba(7,17,24,.26))}.scene span{position:absolute;z-index:1;bottom:5px;left:6px;color:white;font-size:7px;font-weight:650;text-shadow:0 1px 4px #26323a}.coast{background:linear-gradient(180deg,#91bfd0 0 43%,#e8d29c 44% 55%,#588a91 56% 72%,#d8c899 73%)}.coast:before{content:"";position:absolute;width:165%;height:50%;left:-30%;bottom:-20%;border-radius:50%;background:#eee2bd;transform:rotate(-13deg)}.mountain{background:linear-gradient(#9bb7ce 0 54%,#7d9d88 55%)}.mountain:before{content:"";position:absolute;bottom:12px;left:-12px;width:88px;height:65px;background:#677c7e;clip-path:polygon(0 100%,51% 0,100% 100%)}.mountain:after{content:"";position:absolute;bottom:12px;right:-11px;width:100px;height:54px;background:#91a69b;clip-path:polygon(0 100%,46% 8%,100% 100%)}.city{background:linear-gradient(#9db6c4 0 45%,#64787d 46%)}.city:before{content:"";position:absolute;inset:23px 0 10px;background:repeating-linear-gradient(90deg,#58676b 0 16px,#d4ae88 16px 22px,#667a78 22px 39px)}.forest{background:linear-gradient(#aac3c0,#77928a)}.forest:before{content:"";position:absolute;bottom:10px;left:0;right:0;height:52px;background:radial-gradient(ellipse at 15% 75%,#526d5c 0 23px,transparent 24px),radial-gradient(ellipse at 48% 65%,#466553 0 27px,transparent 28px),radial-gradient(ellipse at 85% 75%,#617c64 0 26px,transparent 27px)}.photo-meta{padding:6px}.file{font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta-row{font-size:7px;color:var(--sub);display:flex;justify-content:space-between;gap:3px;margin-top:3px}.share-pill{color:var(--accent);font-weight:700}.foot{font-size:8px;color:var(--sub);border-top:1px solid var(--rule);padding-top:9px;margin-top:10px;display:flex;justify-content:space-between}
+    .option-foot{display:flex;align-items:center;justify-content:space-between;padding:13px 17px 16px;gap:10px}.swatches{display:flex;gap:5px}.swatches i{width:13px;height:13px;border-radius:50%;background:var(--sw)}.pick{border:1px solid var(--line);background:var(--paper);color:var(--text);padding:8px 11px;border-radius:8px;font-size:11px;font-weight:700}.pick:hover{background:var(--accent);border-color:var(--accent);color:#fff}.chosen .pick{background:var(--accent);color:#fff;border-color:var(--accent)}.compare-note{max-width:1370px;margin:16px auto 0;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:16px}
+    /* Variation A: airy, cool neutral, straightforward top navigation. */
+    .variant-a{--accent:#507cab;--accent-ink:#fff;--tint:#edf3f8}.variant-a .preview{--accent:#507cab;--accent-ink:#fff;--tint:#edf3f8}.variant-a .appbar{height:45px}.variant-a .drop{border-style:dashed}
+    /* Variation B: compact, dark surfaces and a vivid mint accent. */
+    .variant-b{--surface:#20252a;--surface-2:#252b31;--ink:#eef2f3;--sub:#9ba7ac;--rule:#394147;--quiet:#2c3338;--accent:#66b5a0;--accent-ink:#10231f;--tint:#283d39}.variant-b .preview{--surface:#20252a;--surface-2:#252b31;--ink:#eef2f3;--sub:#9ba7ac;--rule:#394147;--quiet:#2c3338;--accent:#66b5a0;--accent-ink:#10231f;--tint:#283d39}.variant-b .appbar{background:#1b2024}.variant-b .app-links{gap:10px}.variant-b .mock-content{padding:12px}.variant-b .drop{min-height:59px}.variant-b .scene{height:69px}.variant-b .photo{border-radius:5px}.variant-b .search,.variant-b .sort{border-radius:4px}
+    html[data-theme="light"] .variant-b{--surface:#f8faf9;--surface-2:#fff;--ink:#25302e;--sub:#717f7b;--rule:#dfe7e4;--quiet:#f0f4f2;--accent:#397b6d;--accent-ink:#fff;--tint:#eaf3f0}html[data-theme="light"] .variant-b .preview{--surface:#f8faf9;--surface-2:#fff;--ink:#25302e;--sub:#717f7b;--rule:#dfe7e4;--quiet:#f0f4f2;--accent:#397b6d;--accent-ink:#fff;--tint:#eaf3f0}.variant-b .appbar{background:var(--surface-2)}
+    /* Variation C: warm album, larger photographs and gentle terracotta accent. */
+    .variant-c{--surface:#fffefa;--surface-2:#fffefa;--ink:#33312d;--sub:#827c73;--rule:#e9e3d9;--quiet:#f7f4ee;--accent:#ae7056;--accent-ink:#fff;--tint:#f7eee8}.variant-c .preview{--surface:#fffefa;--surface-2:#fffefa;--ink:#33312d;--sub:#827c73;--rule:#e9e3d9;--quiet:#f7f4ee;--accent:#ae7056;--accent-ink:#fff;--tint:#f7eee8}.variant-c .appbar{border-bottom:0}.variant-c .mock-content{padding:17px}.variant-c .drop{min-height:68px;border-style:solid}.variant-c .scene{height:90px}.variant-c .photo{border-radius:4px}.variant-c .photo-meta{padding:7px}.variant-c .welcome h3{font-family:Georgia,serif;font-weight:500;font-size:19px;letter-spacing:-.03em}
+    html[data-theme="dark"] .variant-c{--surface:#242321;--surface-2:#282725;--ink:#f1ede6;--sub:#b3aa9e;--rule:#403d38;--quiet:#302e2b;--accent:#cf9275;--accent-ink:#251913;--tint:#382c26}html[data-theme="dark"] .variant-c .preview{--surface:#242321;--surface-2:#282725;--ink:#f1ede6;--sub:#b3aa9e;--rule:#403d38;--quiet:#302e2b;--accent:#cf9275;--accent-ink:#251913;--tint:#382c26}
+    @media(max-width:1000px){.options{grid-template-columns:1fr;max-width:620px}.preview{margin:0 13px}.gallery{gap:10px}.scene{height:125px}.variant-b .scene{height:112px}.variant-c .scene{height:140px}.intro{max-width:620px}.compare-note{max-width:620px}}
+    @media(max-width:520px){.page{padding:20px 12px 32px}.intro{display:block}.theme{margin-top:14px}.option-head{padding:15px}.mock-content{padding:12px}.scene{height:92px}.variant-b .scene{height:82px}.variant-c .scene{height:105px}.app-links{gap:8px}.app-links span:last-child{display:none}.profile .profile-name{display:none}.compare-note{display:block;line-height:1.5}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="intro">
+      <div><div class="eyebrow">Picshare · Designrichtung</div><h1>Drei ruhige Ansätze.</h1><p>Gleiche Funktionen, andere Stimmung und Anordnung. Wähle den Entwurf, der sich für euren privaten Fotoaustausch am richtigsten anfühlt.</p></div>
+      <button class="theme" id="themeToggle" type="button" aria-label="Farbschema wechseln">☾ <span>Zum dunklen Modus</span></button>
+    </header>
+
+    <section class="options" aria-label="Designvarianten">
+      <article class="option variant-a" data-option="a" style="--accent:#507cab">
+        <header class="option-head"><div><h2>01 · Klar</h2><p>Hell, luftig und direkt. Klassische Galerie mit viel Platz.</p></div><span class="option-label">A</span></header>
+        <div class="preview">
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Galerie</span><span>Freigaben</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="mock-content">
+            <div class="welcome"><div><h3>Deine Galerie</h3><p>Alle gemeinsamen Erinnerungen an einem Ort.</p></div><button class="btn">＋ Hochladen</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>Bilder hier ablegen</strong><small>oder Dateien auswählen · bis 20 MB pro Bild</small><div class="progress"><span>3 von 4 Bildern</span><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>Alle Bilder</b><span>Meine Uploads</span></div><div class="tools"><span class="search">⌕ &nbsp;Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="gallery">
+              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">Link kopieren</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
+              <div class="photo"><div class="scene city"><span>Abendrunde</span></div><div class="photo-meta"><div class="file">abend.png</div><div class="meta-row"><span>Di. · Alex</span><span class="share-pill">Freigegeben</span></div></div></div>
+            </div><div class="foot"><span>12 Bilder</span><span>Speicher: 248 MB</span></div>
+          </div>
+        </div>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#507cab"></i><i style="--sw:#eef1f4"></i><i style="--sw:#30343a"></i></div><button class="pick" type="button">A auswählen</button></footer>
+      </article>
+
+      <article class="option variant-b" data-option="b" style="--accent:#397b6d">
+        <header class="option-head"><div><h2>02 · Kompakt</h2><p>Etwas dichter und werkzeugorientiert. Akzent in ruhigem Grün.</p></div><span class="option-label">B</span></header>
+        <div class="preview">
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Bilder</span><span>Geteilt</span><span>Personen</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="mock-content">
+            <div class="welcome"><div><h3>Alle Bilder <span style="font-size:10px;color:var(--sub);font-weight:500">12</span></h3><p>Gemeinsam geteilt · zuletzt aktualisiert eben</p></div><button class="btn">＋ Upload</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>3 Dateien werden hochgeladen</strong><small>strand.jpg · berge.jpg · wald.jpg</small><div class="progress"><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>Alle</b><span>Meine</span><span>Freigegeben</span></div><div class="tools"><span class="search">⌕ Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="gallery">
+              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">↗ Kopieren</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
+              <div class="photo"><div class="scene forest"><span>Am Waldsee</span></div><div class="photo-meta"><div class="file">wald.png</div><div class="meta-row"><span>Mo. · Ben</span><span class="share-pill">Freigegeben</span></div></div></div>
+            </div><div class="foot"><span>12 Elemente · 3 Mitglieder</span><span>248 MB</span></div>
+          </div>
+        </div>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#397b6d"></i><i style="--sw:#edf2ef"></i><i style="--sw:#24292e"></i></div><button class="pick" type="button">B auswählen</button></footer>
+      </article>
+
+      <article class="option variant-c" data-option="c" style="--accent:#ae7056">
+        <header class="option-head"><div><h2>03 · Album</h2><p>Ein wenig wärmer und persönlicher. Fotos stehen stärker im Mittelpunkt.</p></div><span class="option-label">C</span></header>
+        <div class="preview">
+          <div class="appbar"><div class="brand"><span class="brand-mark">P</span>picshare</div><nav class="app-links"><span class="active">Sammlung</span><span>Freigabelinks</span></nav><div class="profile"><span class="avatar">AL</span><span class="profile-name">Alex</span>⌄</div></div>
+          <div class="mock-content">
+            <div class="welcome"><div><h3>Unsere Momente</h3><p>Eine kleine Sammlung von uns allen.</p></div><button class="btn">＋ Bilder</button></div>
+            <div class="drop"><span class="upload-icon">↑</span><div><strong>Fotos hinzufügen</strong><small>Hier ablegen oder vom Gerät auswählen</small><div class="progress"><span>Wird hochgeladen</span><span class="track"><i></i></span><span>68%</span></div></div></div>
+            <div class="toolbar"><div class="tabs"><b>Alle Fotos</b><span>Von mir</span></div><div class="tools"><span class="search">⌕ Suchen</span><span class="sort">Neueste⌄</span></div></div>
+            <div class="gallery">
+              <div class="photo"><div class="scene coast"><span>Sonntag am Meer</span></div><div class="photo-meta"><div class="file">strand.jpg</div><div class="meta-row"><span>Heute · Alex</span><span class="share-pill">Link kopieren</span></div></div></div>
+              <div class="photo"><div class="scene mountain"><span>Wochenende</span></div><div class="photo-meta"><div class="file">bergblick.webp</div><div class="meta-row"><span>Gestern · Mia</span><span>7 Tage</span></div></div></div>
+              <div class="photo"><div class="scene city"><span>Abendrunde</span></div><div class="photo-meta"><div class="file">abend.png</div><div class="meta-row"><span>Di. · Alex</span><span class="share-pill">Geteilt</span></div></div></div>
+            </div><div class="foot"><span>12 Erinnerungen</span><span>Automatisch löschen: 30 Tage</span></div>
+          </div>
+        </div>
+        <footer class="option-foot"><div class="swatches"><i style="--sw:#ae7056"></i><i style="--sw:#f7f3ec"></i><i style="--sw:#34322f"></i></div><button class="pick" type="button">C auswählen</button></footer>
+      </article>
+    </section>
+    <p class="compare-note"><span>Die Vorschauen sind responsive. Der Modus-Schalter oben ändert alle drei Entwürfe.</span><span id="choice" aria-live="polite">Noch keine Variante ausgewählt</span></p>
+  </main>
+  <script>
+    const root = document.documentElement;
+    const themeButton = document.getElementById('themeToggle');
+    const savedTheme = localStorage.getItem('picshare-design-theme');
+    let theme = savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    function applyTheme(){root.dataset.theme=theme;themeButton.innerHTML=theme==='light'?'☾ <span>Zum dunklen Modus</span>':'☀ <span>Zum hellen Modus</span>';themeButton.setAttribute('aria-label',theme==='light'?'Dunklen Modus aktivieren':'Hellen Modus aktivieren')}
+    applyTheme();
+    themeButton.addEventListener('click',()=>{theme=theme==='light'?'dark':'light';localStorage.setItem('picshare-design-theme',theme);applyTheme()});
+    const labels={a:'Klar',b:'Kompakt',c:'Album'};
+    document.querySelectorAll('.pick').forEach(button=>button.addEventListener('click',()=>{const option=button.closest('.option');document.querySelectorAll('.option').forEach(item=>{item.classList.remove('chosen');item.querySelector('.pick').setAttribute('aria-pressed','false')});option.classList.add('chosen');button.setAttribute('aria-pressed','true');document.getElementById('choice').textContent='Ausgewählt: '+labels[option.dataset.option]}));
+  </script>
+</body>
+</html>

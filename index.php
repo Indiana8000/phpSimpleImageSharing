@@ -3,6 +3,19 @@ declare(strict_types=1);
 
 // Private media sharing for PHP 8.4 shared hosting.
 // Copy config.example.php to config.php and configure the private data directory.
+$runtimeIssues = [];
+if (version_compare(PHP_VERSION, '8.4.0', '<')) $runtimeIssues[] = 'PHP 8.4 or later is required. The host is running ' . PHP_VERSION . '.';
+foreach (['pdo_sqlite', 'fileinfo', 'session'] as $requiredExtension) {
+    if (!extension_loaded($requiredExtension)) $runtimeIssues[] = 'Enable the PHP extension: ' . $requiredExtension . '.';
+}
+if ($runtimeIssues !== []) {
+    http_response_code(503);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><html lang="en"><meta charset="utf-8"><title>Setup requirements</title><h1>Setup requirements are missing</h1><ul>';
+    foreach ($runtimeIssues as $runtimeIssue) echo '<li>' . htmlspecialchars($runtimeIssue, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</li>';
+    echo '</ul><p>Enable the listed items in the hosting control panel or ask the hosting provider for help.</p></html>';
+    exit;
+}
 $configFile = __DIR__ . '/config.php';
 if (!is_file($configFile)) {
     http_response_code(503);
@@ -70,6 +83,23 @@ $loginThrottleKey = LoginRateLimiter::key($remoteAddress);
 
 function h(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function token(): string { return bin2hex(random_bytes(32)); }
+function iniBytes(string $setting): int {
+    $setting = trim($setting);
+    if ($setting === '-1') return PHP_INT_MAX;
+    if (!preg_match('/\A([0-9]+(?:\.[0-9]+)?)\s*([KMG]?)B?\z/i', $setting, $matches)) return 0;
+    $power = match (strtoupper($matches[2])) { 'K' => 1, 'M' => 2, 'G' => 3, default => 0 };
+    return (int)((float)$matches[1] * (1024 ** $power));
+}
+function formatBytes(int $bytes): string {
+    if ($bytes < 1024) return $bytes . ' B';
+    $units = ['KiB', 'MiB', 'GiB', 'TiB'];
+    $size = (float)$bytes;
+    foreach ($units as $unit) {
+        $size /= 1024;
+        if ($size < 1024 || $unit === 'TiB') return number_format($size, 1) . ' ' . $unit;
+    }
+    return $bytes . ' B';
+}
 function csrf(): string {
     if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(32));
     return (string)$_SESSION['csrf'];
@@ -369,11 +399,29 @@ $allGalleryImages = $images;
 $images = array_slice($images, ($galleryPage - 1) * $imagesPerPage, $imagesPerPage);
 if ($action === 'users' && $currentUser['role'] === 'admin') {
     $users = Auth::listUsers($pdo, $currentUser);
+    $storageStats = $pdo->query('SELECT COUNT(*) AS media_count, COALESCE(SUM(size_bytes), 0) AS media_bytes FROM media')->fetch(PDO::FETCH_ASSOC);
+    $uploadLimit = iniBytes((string)ini_get('upload_max_filesize'));
+    $postLimitValue = (string)ini_get('post_max_size');
+    $postLimit = trim($postLimitValue) === '0' ? PHP_INT_MAX : iniBytes($postLimitValue);
+    $httpsActive = !empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off';
+    $uploadLimitsOkay = $maxBytes > 0 && $uploadLimit >= $maxBytes && $postLimit >= $maxBytes + 1048576;
+    $systemChecks = [
+        ['ok' => version_compare(PHP_VERSION, '8.4.0', '>='), 'label' => 'PHP version', 'detail' => PHP_VERSION . ' · requires 8.4+'],
+        ['ok' => extension_loaded('pdo_sqlite'), 'label' => 'PDO SQLite', 'detail' => extension_loaded('pdo_sqlite') ? 'Available' : 'Enable pdo_sqlite in the hosting control panel'],
+        ['ok' => extension_loaded('fileinfo'), 'label' => 'File inspection', 'detail' => extension_loaded('fileinfo') ? 'Available' : 'Enable fileinfo in the hosting control panel'],
+        ['ok' => extension_loaded('session'), 'label' => 'Sessions', 'detail' => extension_loaded('session') ? 'Available' : 'Enable the session extension in the hosting control panel'],
+        ['ok' => $httpsActive, 'label' => 'HTTPS', 'detail' => $httpsActive ? 'Connection is encrypted' : 'Enable HTTPS for this domain'],
+        ['ok' => $uploadLimitsOkay, 'label' => 'Upload limits', 'detail' => ($maxBytes > 0 ? 'upload_max_filesize ' . ini_get('upload_max_filesize') . ' · post_max_size ' . $postLimitValue . ' · app limit ' . formatBytes($maxBytes) . ' (allow 1 MiB for request overhead)' : 'Set max_upload_bytes to a positive value in config.php')],
+        ['ok' => true, 'label' => 'Private storage', 'detail' => 'Writable and outside the public web root'],
+    ];
     pageStart('Manage users');
     if ($error) echo '<p class="error">' . h($error) . '</p>';
     if ($notice) echo '<p class="notice">' . h($notice) . '</p>';
     echo '<section class="welcome"><div><p class="eyebrow">Administration</p><h1>Manage users</h1><p class="subheading">Create and manage access for your friends.</p></div><a class="quiet-button" href="./">Back to gallery</a></section>';
     echo '<section class="admin-panel"><h2>Create an account</h2><p>Passwords must contain at least 12 characters.</p><form class="user-create" method="post" action="?action=create_user"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><label>Username<input name="username" required minlength="3" maxlength="32" autocomplete="off"></label><label>Display name<input name="display_name" required maxlength="80"></label><label>Temporary password<input name="password" type="password" required minlength="12" autocomplete="new-password"></label><label>Role<select name="role"><option value="member">Member</option><option value="admin">Administrator</option></select></label><button class="primary">Create account</button></form></section>';
+    echo '<section class="admin-panel"><h2>System status</h2><p>Checks for common shared-hosting setup issues.</p><ul class="system-checks">';
+    foreach ($systemChecks as $check) echo '<li><span class="check-mark ' . ($check['ok'] ? 'ok' : 'issue') . '" aria-hidden="true">' . ($check['ok'] ? '✓' : '!') . '</span><div><strong>' . h($check['label']) . '</strong><small>' . h($check['detail']) . '</small></div></li>';
+    echo '</ul><p class="storage-usage">Stored media: ' . (int)($storageStats['media_count'] ?? 0) . ' files · ' . h(formatBytes((int)($storageStats['media_bytes'] ?? 0))) . '</p></section>';
     echo '<div class="section-heading"><div><h2>Accounts</h2><p>' . count($users) . ' users</p></div></div><div class="user-list">';
     foreach ($users as $account) {
         echo '<article class="user-card"><div><strong>' . h($account['display_name']) . '</strong><small>@' . h($account['username']) . ' · ' . h(ucfirst($account['role'])) . ' · ' . ((int)$account['active'] === 1 ? 'Active' : 'Disabled') . '</small></div><form class="user-actions" method="post" action="?action=set_user_active"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="user_id" value="' . h($account['id']) . '"><input type="hidden" name="active" value="' . ((int)$account['active'] === 1 ? '0' : '1') . '"><button class="text-action">' . ((int)$account['active'] === 1 ? 'Disable' : 'Enable') . '</button></form><form class="user-actions" method="post" action="?action=reset_user_password"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="user_id" value="' . h($account['id']) . '"><label class="password-reset">New password<input type="password" name="new_password" required minlength="12" autocomplete="new-password"></label><button class="text-action">Reset password</button></form></article>';
@@ -440,6 +488,7 @@ function pageStart(string $title): void {
     echo '<style>.upload{flex-wrap:wrap}.retention-control{min-width:120px}.expiry-label{display:block;color:var(--muted);font-size:10px;margin-top:2px}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:#56815f}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.retention-control{flex:1;min-width:130px}.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
     echo '<style>.gallery-filters{display:flex;align-items:center;gap:7px}.gallery-filters label{font-size:11px;color:var(--muted)}.gallery-filters input,.gallery-filters select{font:inherit;font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px}.gallery-filters input{width:170px}.detail-heading,.detail-nav,.detail-actions{display:flex;align-items:center;gap:9px}.detail-heading{justify-content:space-between;margin-bottom:15px}.detail-nav{font-size:12px;color:var(--muted)}.quiet-button.disabled{opacity:.45}.detail-card{overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.detail-image{display:block;width:100%;max-height:75vh;object-fit:contain;background:var(--quiet)}.detail-info{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px}.detail-info h1{font:500 21px/1.2 Georgia,serif;overflow-wrap:anywhere;margin:0}.detail-info p{font-size:12px;color:var(--muted);margin:5px 0 0}.detail-actions{flex-wrap:wrap}.pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:22px;font-size:12px;color:var(--muted)}@media(max-width:650px){.section-heading{align-items:flex-start;flex-direction:column;gap:10px}.gallery-filters{width:100%;flex-wrap:wrap}.gallery-filters input{flex:1;min-width:90px}.gallery-filters label:first-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.detail-heading{align-items:flex-start;flex-direction:column}.detail-nav{width:100%;justify-content:space-between}.detail-info{align-items:flex-start;flex-direction:column}.detail-actions{width:100%}}</style>';
     echo '<style>.bulk-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 11px;margin:0 0 14px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.bulk-toolbar>span{font-size:11px;color:var(--muted);margin-right:auto}.select-page{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}.photo-card{position:relative}.select-image{position:absolute;z-index:2;top:9px;left:9px;display:grid;place-items:center;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--surface);box-shadow:var(--shadow);cursor:pointer}.select-image input,.select-page input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}@media(max-width:600px){.bulk-toolbar{gap:7px}.bulk-toolbar>span{margin-right:0}.bulk-toolbar .text-action{font-size:10px}}</style>';
+    echo '<style>.system-checks{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 18px}.system-checks li{display:flex;align-items:flex-start;gap:9px;min-width:0}.system-checks li>div{min-width:0}.system-checks strong,.system-checks small{display:block}.system-checks strong{font-size:12px}.system-checks small{font-size:11px;color:var(--muted);overflow-wrap:anywhere}.check-mark{width:19px;height:19px;flex:none;display:grid;place-items:center;border-radius:50%;font-size:12px;font-weight:800}.check-mark.ok{background:color-mix(in srgb,#56815f 15%,var(--surface));color:#56815f}.check-mark.issue{background:color-mix(in srgb,var(--danger) 15%,var(--surface));color:var(--danger)}.storage-usage{border-top:1px solid var(--line);padding-top:11px;margin-top:15px!important;color:var(--ink)!important}@media(max-width:600px){.system-checks{grid-template-columns:1fr}}</style>';
 }
 function pageEnd(): void {
     echo '</main></div><script>';

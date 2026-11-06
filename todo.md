@@ -42,7 +42,7 @@ data_dir/
 - [x] Keep the database and user directories outside the web root. Serve media through PHP only after checking authorization.
 - [x] Use SQLite's default rollback journal mode and a 5-second `busy_timeout`; reconsider WAL only after checking the Hetzner host.
 - [x] Keep write transactions short and handle temporary write locks through SQLite's busy timeout.
-- [ ] Back up the SQLite database and media directories as a consistent set; document restoring them together.
+- [x] Back up the SQLite database and media directories as a consistent set; document restoring them together.
 
 ## 0. Solid foundation
 
@@ -51,7 +51,7 @@ data_dir/
 - [x] Harden sign-in: limit login attempts, set session cookies before starting the session, rotate the session ID after sign-in, and consistently enforce logout and CSRF protection.
 - [x] Secure uploads: enforce size limits server-side, inspect actual file content, reject malformed or oversized images, and sanitize original names used as display metadata.
 - [ ] Use consistent error handling and logs without recording passwords, session IDs, or private share tokens.
-- [ ] Add maintenance information: show configuration and storage usage in the admin area; document backup and restore.
+- [x] Show configuration checks and stored media usage in the admin area; document backup and restore.
 
 **Done when:** a fresh install can be configured securely and common hosting problems come with a concrete fix.
 
@@ -117,11 +117,12 @@ data_dir/
 
 ## 6. Simple shared-hosting operations
 
-- [ ] Document installation as a short checklist: upload files, create the data directory, configure settings, enable HTTPS.
-- [ ] Support hosts without shell access; required values should be configurable in a file.
-- [ ] Explain how `upload_max_filesize`, `post_max_size`, execution time, and available disk space affect uploads.
-- [ ] Document backup and restore for media plus metadata; optionally offer a simple admin-only ZIP export.
-- [ ] Document upgrades and safe defaults; keep configuration examples in sync when options change.
+- [x] Document installation as a short checklist: upload files, create the data directory, configure settings, enable HTTPS.
+- [x] Support hosts without shell access; required values are configurable in a file, and password hashes can be generated locally.
+- [x] Explain how `upload_max_filesize`, `post_max_size`, request timeouts, and available disk space affect uploads.
+- [x] Document a maintenance-window backup and restore for the SQLite database plus all media; an in-app export is still open.
+- [x] Document upgrades and safe defaults; keep configuration examples in sync when options change.
+- [x] Show PHP extensions, HTTPS status, upload limits, storage count, and stored media bytes in the admin area.
 - [ ] Prepare the GitHub release with a clear README, MIT license, screenshots, release notes, and an issue template.
 
 **Done when:** a technically curious person can install phpSimpleImageSharing on PHP hosting without a separate database server and restore it if needed.

@@ -80,9 +80,12 @@ function checkCsrf(): void {
     }
 }
 
-$action = (string)($_GET['action'] ?? '');
+$rawAction = $_GET['action'] ?? '';
+$action = is_string($rawAction) ? $rawAction : '';
 $error = '';
-$notice = '';
+$notice = (string)($_SESSION['flash_notice'] ?? '');
+$error = (string)($_SESSION['flash_error'] ?? '');
+unset($_SESSION['flash_notice'], $_SESSION['flash_error']);
 if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf();
     $_SESSION = [];
@@ -90,7 +93,10 @@ if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: ./'); exit;
 }
 if (array_key_exists('invalid_share', $_GET)) redirectToRickroll();
-if (array_key_exists('share', $_GET)) servePublicShare($pdo, $mediaStorage, (string)$_GET['share']);
+if (array_key_exists('share', $_GET)) {
+    $shareValue = $_GET['share'];
+    servePublicShare($pdo, $mediaStorage, is_string($shareValue) ? $shareValue : '');
+}
 $currentUser = null;
 $sessionUserId = (string)($_SESSION['user_id'] ?? '');
 if ($sessionUserId !== '') {
@@ -136,7 +142,8 @@ try {
 }
 
 if ($action === 'image') {
-    $id = (string)($_GET['id'] ?? '');
+    $rawId = $_GET['id'] ?? '';
+    $id = is_string($rawId) ? $rawId : '';
     if (!preg_match('/\A[a-f0-9]{32,64}\z/', $id)) { http_response_code(404); exit; }
     $statement = $pdo->prepare('SELECT owner_id, storage_name, mime, expires_at FROM media WHERE id = :id LIMIT 1');
     $statement->execute([':id' => $id]);
@@ -149,6 +156,24 @@ if ($action === 'image') {
     header('Content-Length: ' . filesize($file));
     header('X-Content-Type-Options: nosniff');
     header('Content-Security-Policy: default-src \'none\'; sandbox');
+    header('Cache-Control: private, no-store');
+    readfile($file); exit;
+}
+
+if ($action === 'download') {
+    $rawId = $_GET['id'] ?? '';
+    $id = is_string($rawId) ? $rawId : '';
+    if (!preg_match('/\A[a-f0-9]{32,64}\z/', $id)) { http_response_code(404); exit; }
+    $statement = $pdo->prepare('SELECT owner_id, storage_name, original_name, mime, expires_at FROM media WHERE id = :id LIMIT 1');
+    $statement->execute([':id' => $id]);
+    $media = $statement->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($media) || ($media['expires_at'] !== null && (int)$media['expires_at'] <= time())) { http_response_code(404); exit; }
+    $file = $mediaStorage->locate((string)$media['owner_id'], (string)$media['storage_name']);
+    if ($file === null || !in_array($media['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) { http_response_code(404); exit; }
+    header('Content-Type: ' . $media['mime']);
+    header('Content-Length: ' . filesize($file));
+    header('Content-Disposition: attachment; filename="download"; filename*=UTF-8\'\'' . rawurlencode((string)$media['original_name']));
+    header('X-Content-Type-Options: nosniff');
     header('Cache-Control: private, no-store');
     readfile($file); exit;
 }
@@ -241,6 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mediaStorage->delete((string)$media['owner_id'], (string)$media['storage_name']);
                 $delete = $pdo->prepare('DELETE FROM media WHERE id = :id');
                 $delete->execute([':id' => $id]);
+                $_SESSION['flash_notice'] = 'Image deleted.';
+            } else {
+                $_SESSION['flash_error'] = 'This image could not be deleted.';
             }
             header('Location: ./'); exit;
         } elseif ($action === 'create_user') {
@@ -281,6 +309,24 @@ try {
     $error = 'The gallery could not be loaded.';
     error_log('phpSimpleImageSharing gallery error: ' . $exception->getMessage());
 }
+$rawSort = $_GET['sort'] ?? 'newest';
+$sortOrder = is_string($rawSort) && $rawSort === 'oldest' ? 'oldest' : 'newest';
+$rawSearch = $_GET['q'] ?? '';
+$searchTerm = is_string($rawSearch) ? trim(substr($rawSearch, 0, 120)) : '';
+if ($searchTerm !== '') {
+    $images = array_values(array_filter($images, static fn(array $image): bool => stripos((string)$image['original_name'], $searchTerm) !== false));
+}
+usort($images, static function (array $left, array $right) use ($sortOrder): int {
+    $comparison = ((int)$left['created_at'] <=> (int)$right['created_at']) ?: strcmp((string)$left['id'], (string)$right['id']);
+    return $sortOrder === 'newest' ? -$comparison : $comparison;
+});
+$totalImageCount = count($images);
+$imagesPerPage = 36;
+$pageCount = max(1, (int)ceil($totalImageCount / $imagesPerPage));
+$rawPage = $_GET['page'] ?? 1;
+$galleryPage = min($pageCount, max(1, is_scalar($rawPage) ? (int)$rawPage : 1));
+$allGalleryImages = $images;
+$images = array_slice($images, ($galleryPage - 1) * $imagesPerPage, $imagesPerPage);
 if ($action === 'users' && $currentUser['role'] === 'admin') {
     $users = Auth::listUsers($pdo, $currentUser);
     pageStart('Manage users');
@@ -295,24 +341,46 @@ if ($action === 'users' && $currentUser['role'] === 'admin') {
     echo '</div><div class="toast" id="toast" role="status" aria-live="polite"></div>';
     pageEnd(); exit;
 }
+if ($action === 'detail') {
+    $rawDetailId = $_GET['id'] ?? '';
+    $detailId = is_string($rawDetailId) ? $rawDetailId : '';
+    $detailIndex = null;
+    foreach ($allGalleryImages as $index => $image) {
+        if (hash_equals((string)$image['id'], $detailId)) { $detailIndex = $index; break; }
+    }
+    if ($detailIndex === null) { http_response_code(404); pageStart('Image not found'); echo '<p class="error">This image is unavailable.</p><a class="quiet-button" href="./">Back to gallery</a>'; pageEnd(); exit; }
+    $detail = $allGalleryImages[$detailIndex];
+    $previousUrl = $detailIndex > 0 ? '?' . http_build_query(['action' => 'detail', 'id' => $allGalleryImages[$detailIndex - 1]['id'], 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]) : null;
+    $nextUrl = $detailIndex + 1 < count($allGalleryImages) ? '?' . http_build_query(['action' => 'detail', 'id' => $allGalleryImages[$detailIndex + 1]['id'], 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]) : null;
+    $detailImageUrl = '?action=image&id=' . rawurlencode((string)$detail['id']);
+    pageStart((string)$detail['original_name']);
+    echo '<section class="detail-heading"><a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage])) . '">← Back to gallery</a><nav class="detail-nav" aria-label="Image navigation">' . ($previousUrl === null ? '<span class="quiet-button disabled">← Previous</span>' : '<a class="quiet-button" href="' . h($previousUrl) . '" rel="prev">← Previous</a>') . '<span>' . ($detailIndex + 1) . ' of ' . count($allGalleryImages) . '</span>' . ($nextUrl === null ? '<span class="quiet-button disabled">Next →</span>' : '<a class="quiet-button" href="' . h($nextUrl) . '" rel="next">Next →</a>') . '</nav></section>';
+    echo '<article class="detail-card"><img class="detail-image" src="' . h($detailImageUrl) . '" alt="' . h((string)$detail['original_name']) . '"><div class="detail-info"><div><h1>' . h((string)$detail['original_name']) . '</h1><p>' . h(date('Y-m-d', (int)$detail['created_at'])) . ' · Uploaded by ' . h((string)$detail['display_name']) . '</p></div><div class="detail-actions"><a class="quiet-button" href="?action=download&id=' . rawurlencode((string)$detail['id']) . '">Download original</a><button type="button" class="quiet-button" data-copy-link="' . h($detailImageUrl) . '">Copy private link</button></div></div></article><div class="toast" id="toast" role="status" aria-live="polite"></div>';
+    pageEnd(); exit;
+}
 pageStart('Gallery');
 if ($error) echo '<p class="error">' . h($error) . '</p>';
 if ($notice) echo '<p class="notice">' . $notice . '</p>';
 echo '<section class="welcome"><div><p class="eyebrow">Your private album · Signed in as ' . h($currentUser['username']) . '</p><h1>Our moments</h1><p class="subheading">A small collection of moments shared with friends.</p></div><div class="welcome-actions">' . ($currentUser['role'] === 'admin' ? '<a class="quiet-button" href="?action=users">Manage users</a>' : '') . '<span class="private-badge"><span></span>Private</span></div></section>';
 echo '<form class="upload" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><div class="upload-copy"><span class="upload-icon" aria-hidden="true">↑</span><div><strong>Add images</strong><small>Drop files here or choose them · JPEG, PNG, GIF, WebP · up to ' . h((string)round($maxBytes / 1024 / 1024)) . ' MB each</small></div></div><label class="retention-control" for="retention"><span>Keep for</span><select id="retention" name="retention"><option value="never">Never delete</option><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select></label><label class="file-control"><span>Choose images</span><input id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label><button class="primary" id="uploadButton">Upload</button><div class="upload-queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div></form>';
-echo '<div class="section-heading"><div><h2>All images</h2><p>' . count($images) . ' ' . (count($images) === 1 ? 'image' : 'images') . '</p></div><span class="sort-label">Newest first</span></div>';
-if (!$images) echo '<div class="empty"><span class="empty-icon">▧</span><h2>Your album is ready for its first image</h2><p>Add an image above to get started.</p></div>';
+echo '<div class="section-heading"><div><h2>All images</h2><p>' . $totalImageCount . ' ' . ($totalImageCount === 1 ? 'image' : 'images') . '</p></div><form class="gallery-filters" method="get" action="./"><label for="gallerySearch">Search images</label><input id="gallerySearch" type="search" name="q" maxlength="120" value="' . h($searchTerm) . '" placeholder="Filename"><label for="gallerySort">Sort</label><select id="gallerySort" name="sort"><option value="newest"' . ($sortOrder === 'newest' ? ' selected' : '') . '>Newest first</option><option value="oldest"' . ($sortOrder === 'oldest' ? ' selected' : '') . '>Oldest first</option></select><button class="quiet-button">Apply</button></form></div>';
+if (!$images) echo '<div class="empty"><span class="empty-icon">▧</span><h2>' . ($searchTerm === '' ? 'Your album is ready for its first image' : 'No images match your search') . '</h2><p>' . ($searchTerm === '' ? 'Add an image above to get started.' : 'Try another filename or clear the search.') . '</p></div>';
 echo '<div class="grid">';
 foreach ($images as $image) {
     $id = (string)$image['id'];
     $imageUrl = '?action=image&id=' . rawurlencode($id);
+    $detailUrl = '?' . http_build_query(['action' => 'detail', 'id' => $id, 'sort' => $sortOrder, 'q' => $searchTerm, 'page' => $galleryPage]);
     $name = (string)$image['original_name'];
     $created = (int)$image['created_at'];
     $canManage = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
     $expiryLabel = $image['expires_at'] === null ? '' : '<small class="expiry-label">Deletes ' . h(date('Y-m-d', (int)$image['expires_at'])) . '</small>';
-    echo '<article class="photo-card"><a class="photo" href="' . h($imageUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time>' . $expiryLabel . '<small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" onsubmit="return confirm(\'Delete this image?\')"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
+    echo '<article class="photo-card"><a class="photo" href="' . h($detailUrl) . '"><img loading="lazy" src="' . h($imageUrl) . '" alt="' . h($name) . '"></a><div class="photo-info"><strong title="' . h($name) . '">' . h($name) . '</strong><time datetime="' . h(date('Y-m-d', $created)) . '">' . h(date('Y-m-d', $created)) . '</time>' . $expiryLabel . '<small class="owner-label">Uploaded by ' . h($image['display_name']) . '</small><div class="photo-actions">' . ($canManage ? '<form method="post" action="?action=create_share"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action">Generate share link</button></form>' : '<span></span>') . ($canManage ? '<form method="post" action="?action=delete" data-confirm="' . h('Delete ' . $name . '?') . '"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h($id) . '"><button class="text-action danger">Delete</button></form>' : '') . '</div></div></article>';
 }
-echo '</div><form class="logout" method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button class="text-action">Sign out</button></form><div class="toast" id="toast" role="status" aria-live="polite"></div>';
+echo '</div>';
+if ($pageCount > 1) {
+    echo '<nav class="pagination" aria-label="Gallery pages">' . ($galleryPage > 1 ? '<a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage - 1])) . '">← Previous</a>' : '') . '<span>Page ' . $galleryPage . ' of ' . $pageCount . '</span>' . ($galleryPage < $pageCount ? '<a class="quiet-button" href="?' . h(http_build_query(['q' => $searchTerm, 'sort' => $sortOrder, 'page' => $galleryPage + 1])) . '">Next →</a>' : '') . '</nav>';
+}
+echo '<form class="logout" method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button class="text-action">Sign out</button></form><div class="toast" id="toast" role="status" aria-live="polite"></div>';
 pageEnd();
 
 function pageStart(string $title): void {
@@ -329,6 +397,7 @@ function pageStart(string $title): void {
     </style><body><div class="app-shell"><header class="topbar"><a class="brand" href="./"><span class="brand-mark">P</span>phpSimpleImageSharing</a><div class="top-actions"><button class="theme-toggle" id="themeToggle" type="button">Theme: System</button></div></header><main>';
     echo '<style>.login-panel{max-width:460px;margin:0 auto;padding:28px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow)}.login-panel h1{font:500 32px/1.2 Georgia,serif;letter-spacing:-.04em;margin:0}.login-panel .subheading{margin-bottom:24px}.login-form{display:grid;gap:9px}.login-form label,.user-create label,.password-reset{font-size:12px;font-weight:650}.login-form input,.user-create input,.user-create select,.password-reset input{font:inherit;color:var(--ink);background:var(--raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px}.login-form .primary{margin-top:5px}.welcome-actions{display:flex;align-items:center;gap:9px}.admin-panel{padding:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.admin-panel h2{font-size:15px;margin:0}.admin-panel>p{color:var(--muted);font-size:12px;margin:3px 0 16px}.user-create{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;align-items:end}.user-create label,.password-reset{display:grid;gap:5px}.user-create .primary{height:39px}.user-list{display:grid;gap:9px}.user-card{display:flex;align-items:center;gap:15px;padding:13px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}.user-card>div:first-child{flex:1;min-width:140px}.user-card strong,.user-card small{display:block}.user-card strong{font-size:13px}.user-card small{color:var(--muted);font-size:11px}.user-actions{display:flex;align-items:end;gap:8px;margin:0}.password-reset input{width:145px;padding:7px}.photo-info .owner-label{display:block;color:var(--muted);font-size:10px;margin-top:3px}.share-url{font-size:12px;padding:2px 6px;background:var(--quiet);border-radius:5px;color:var(--ink)}@media(max-width:750px){.user-create{grid-template-columns:repeat(2,minmax(0,1fr))}.user-card{flex-wrap:wrap}.user-card>div:first-child{flex-basis:100%}.password-reset input{width:130px}}@media(max-width:600px){.login-panel{padding:20px}.brand{font-size:13px;letter-spacing:-.07em}.brand-mark{width:25px;height:25px}.welcome-actions{align-items:flex-end;flex-direction:column}.user-create{grid-template-columns:1fr}.user-card{align-items:flex-start}.user-actions{flex-wrap:wrap}}</style>';
     echo '<style>.upload{flex-wrap:wrap}.retention-control{min-width:120px}.expiry-label{display:block;color:var(--muted);font-size:10px;margin-top:2px}.upload.is-dragover{border-color:var(--accent);background:var(--tint)}.upload-queue{flex-basis:100%;border-top:1px solid var(--line);padding-top:12px}.queue-summary{font-size:12px;color:var(--muted);margin-bottom:7px}.queue-items{display:grid;gap:6px}.queue-item{display:grid;grid-template-columns:34px minmax(0,1fr) 160px auto;align-items:center;gap:9px;padding:7px;background:var(--quiet);border-radius:7px}.queue-item img{width:34px;height:34px;object-fit:cover;border-radius:5px}.queue-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.queue-status{font-size:10px;color:var(--muted)}.queue-status.success{color:#56815f}.queue-status.failed{color:var(--danger)}.queue-track{height:4px;background:var(--line);border-radius:10px;overflow:hidden}.queue-track span{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}.queue-refresh{margin-top:8px}.primary:disabled{opacity:.6;cursor:wait}@media(max-width:600px){.retention-control{flex:1;min-width:130px}.queue-item{grid-template-columns:30px minmax(0,1fr) 90px}.queue-item .queue-track{grid-column:2/4;width:100%}.queue-item img{width:30px;height:30px}}</style>';
+    echo '<style>.gallery-filters{display:flex;align-items:center;gap:7px}.gallery-filters label{font-size:11px;color:var(--muted)}.gallery-filters input,.gallery-filters select{font:inherit;font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 9px}.gallery-filters input{width:170px}.detail-heading,.detail-nav,.detail-actions{display:flex;align-items:center;gap:9px}.detail-heading{justify-content:space-between;margin-bottom:15px}.detail-nav{font-size:12px;color:var(--muted)}.quiet-button.disabled{opacity:.45}.detail-card{overflow:hidden;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}.detail-image{display:block;width:100%;max-height:75vh;object-fit:contain;background:var(--quiet)}.detail-info{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px}.detail-info h1{font:500 21px/1.2 Georgia,serif;overflow-wrap:anywhere;margin:0}.detail-info p{font-size:12px;color:var(--muted);margin:5px 0 0}.detail-actions{flex-wrap:wrap}.pagination{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:22px;font-size:12px;color:var(--muted)}@media(max-width:650px){.section-heading{align-items:flex-start;flex-direction:column;gap:10px}.gallery-filters{width:100%;flex-wrap:wrap}.gallery-filters input{flex:1;min-width:90px}.gallery-filters label:first-child{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.detail-heading{align-items:flex-start;flex-direction:column}.detail-nav{width:100%;justify-content:space-between}.detail-info{align-items:flex-start;flex-direction:column}.detail-actions{width:100%}}</style>';
 }
 function pageEnd(): void {
     echo '</main></div><script>';
@@ -339,6 +408,7 @@ function pageEnd(): void {
   function applyTheme(){if(theme==='system')root.removeAttribute('data-theme');else root.dataset.theme=theme;themeButton.textContent='Theme: '+(theme==='system'?'System':theme==='light'?'Light':'Dark');themeButton.setAttribute('aria-label','Change theme. Current: '+theme)}
   applyTheme();themeButton.addEventListener('click',()=>{theme=theme==='system'?'light':theme==='light'?'dark':'system';localStorage.setItem(themeKey,theme);applyTheme()});
   let toastTimer;const toast=document.getElementById('toast');
+  document.querySelectorAll('form[data-confirm]').forEach(form=>form.addEventListener('submit',event=>{if(!window.confirm(form.dataset.confirm)){event.preventDefault()}}));
   document.querySelectorAll('[data-copy-link]').forEach(control=>control.addEventListener('click',async()=>{const url=new URL(control.dataset.copyLink,location.href).href;try{await navigator.clipboard.writeText(url);if(toast){toast.textContent='Link copied';toast.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('show'),2200)}}catch{window.prompt('Copy this link:',url)}}));
 
   const form=document.getElementById('uploadForm');

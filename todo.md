@@ -68,12 +68,14 @@ data_dir/
 
 ## 2. Useful, compact gallery
 
-- [ ] Build a responsive thumbnail grid with loading states and a keyboard-accessible detail view.
-- [ ] Add next/previous navigation, open/download original, and copy-link actions to the detail view.
-- [ ] Sort by newest/oldest upload; optionally add basic filename search.
+- [x] Build a responsive thumbnail grid with lazy-loaded images and a keyboard-accessible detail view.
+- [x] Add next/previous navigation, original download, and private-link copying to the detail view.
+- [x] Sort by newest/oldest upload and search filenames.
 - [ ] Add multi-select with a few bulk actions: copy links and delete selected images.
-- [ ] Confirm deletion with the filename and show a clear success or error message.
-- [ ] Add an empty state and pagination or “Load more” for larger collections.
+- [x] Confirm deletion with the filename.
+- [x] Show a clear deletion success or error message.
+- [x] Add an empty state and pagination for larger collections.
+- [ ] Move search, sorting, and pagination into SQLite queries if galleries grow enough for full metadata scans to become slow.
 
 **Done when:** the gallery stays clear with hundreds of files and key actions work on desktop and mobile.
 

@@ -874,6 +874,7 @@ svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .icon-btn{display:inline-grid;place-items:center;width:38px;height:38px;border:0;border-radius:999px;background:transparent;color:inherit;text-decoration:none}
 .icon-btn:hover{background:var(--quiet)}
 #themeToggle .ti{display:none}
+#themeToggle{padding:0}#themeToggle .ti svg{display:block}
 :root[data-mode=system] #themeToggle .ti-system,:root[data-mode=light] #themeToggle .ti-light,:root[data-mode=dark] #themeToggle .ti-dark{display:block}
 .acct{position:relative}
 .acct summary{list-style:none;display:flex;align-items:center;gap:8px;padding:4px 6px 4px 4px;border-radius:999px;cursor:pointer}

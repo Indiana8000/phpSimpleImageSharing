@@ -308,6 +308,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failureCount = count($uploadResults) - $successCount;
             if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'photo uploaded.' : 'photos uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
+        } elseif ($action === 'quick_share') {
+            // Gallery shortcut: return the active share link, creating one only if none exists.
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: private, no-store');
+            $mediaId = (string)($_POST['id'] ?? '');
+            $now = time();
+            $quickMedia = false;
+            if (preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) {
+                $find = $pdo->prepare('SELECT id, owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
+                $find->execute([':id' => $mediaId]);
+                $quickMedia = $find->fetch(PDO::FETCH_ASSOC);
+            }
+            if (!is_array($quickMedia) || ($quickMedia['expires_at'] !== null && (int)$quickMedia['expires_at'] <= $now)
+                || ($currentUser['role'] !== 'admin' && $quickMedia['owner_id'] !== $currentUser['id'])) {
+                http_response_code(403);
+                echo json_encode(['error' => 'You cannot share this photo.']); exit;
+            }
+            $existing = $pdo->prepare("SELECT token FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND token <> '' AND (expires_at IS NULL OR expires_at > :now) ORDER BY created_at DESC LIMIT 1");
+            $existing->execute([':id' => $mediaId, ':now' => $now]);
+            $quickToken = $existing->fetchColumn();
+            $created = false;
+            if (!is_string($quickToken) || $quickToken === '') {
+                $quickToken = generateShareToken();
+                $created = true;
+                $pdo->beginTransaction();
+                try {
+                    $pdo->prepare('UPDATE share_links SET revoked_at = :now WHERE media_id = :id AND revoked_at IS NULL')->execute([':now' => $now, ':id' => $mediaId]);
+                    $pdo->prepare('INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at) VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)')->execute([
+                        ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId, ':token_hash' => hash('sha256', $quickToken),
+                        ':token' => $quickToken, ':created_at' => $now, ':expires_at' => $quickMedia['expires_at'],
+                    ]);
+                    $pdo->commit();
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    error_log('phpSimpleImageSharing quick share error: ' . $exception->getMessage());
+                    http_response_code(500);
+                    echo json_encode(['error' => 'The share link could not be created.']); exit;
+                }
+            }
+            echo json_encode(['path' => sharePath($quickToken), 'created' => $created]); exit;
         } elseif ($action === 'create_share' || $action === 'revoke_share' || $action === 'set_retention') {
             $mediaId = (string)($_POST['id'] ?? '');
             if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) throw new InvalidArgumentException('Invalid media ID.');
@@ -410,6 +450,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $images = [];
+$sharedIds = [];
 try {
     $query = $pdo->prepare(
         'SELECT media.id, media.owner_id, media.storage_name, media.original_name, media.mime, media.size_bytes, media.created_at, media.expires_at,
@@ -420,6 +461,10 @@ try {
     );
     $query->execute([':now' => time()]);
     $images = $query->fetchAll(PDO::FETCH_ASSOC);
+    // Only the ids of photos with an active share link; tokens never go into the gallery page.
+    $activeShares = $pdo->prepare('SELECT DISTINCT media_id FROM share_links WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now)');
+    $activeShares->execute([':now' => time()]);
+    $sharedIds = array_flip($activeShares->fetchAll(PDO::FETCH_COLUMN));
 } catch (Throwable $exception) {
     $error = 'The gallery could not be loaded.';
     error_log('phpSimpleImageSharing gallery error: ' . $exception->getMessage());
@@ -673,11 +718,15 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     $imageUrl = '?action=image&id=' . rawurlencode($id);
     $detailUrl = '?' . cleanQuery(['action' => 'detail', 'id' => $id, 'q' => $searchTerm, 'sort' => $sortOrder, 'filter' => $filter, 'page' => $galleryPage]);
     $expiry = expiryInfo($image, $now);
+    $canShare = $currentUser['role'] === 'admin' || $image['owner_id'] === $currentUser['id'];
+    $isShared = $canShare && isset($sharedIds[$id]);
     $caption = (string)$image['display_name'] . ', ' . date('Y-m-d', (int)$image['created_at']) . ($expiry !== null ? ', ' . $expiry['label'] : ''); ?>
   <article class="tile">
     <a class="tile-link" href="<?= h($detailUrl) ?>" aria-label="<?= h($name . ', added by ' . (string)$image['display_name']) ?>"><img loading="lazy" decoding="async" src="<?= h($imageUrl) ?>" alt=""></a>
     <label class="pick"><input type="checkbox" form="bulkActionsForm" name="ids[]" value="<?= h($id) ?>" aria-label="Select <?= h($name) ?>"><span class="circle"><?= icon('check') ?></span></label>
     <?= avatar((string)$image['owner_id'], (string)$image['display_name'], 'av by') ?>
+    <?php if ($canShare): ?><span class="shr" title="Has a share link"<?= $isShared ? '' : ' hidden' ?>><?= icon('link') ?><span class="sr">Has a share link</span></span>
+    <button type="button" class="qshare" data-quick-share="<?= h($id) ?>" title="Copy share link" aria-label="Copy share link for <?= h($name) ?>"><?= icon('link') ?></button><?php endif; ?>
     <?php if ($expiry !== null && $expiry['soon']): ?><span class="badge"><?= h($expiry['label']) ?></span><?php endif; ?>
     <?php if ($expiry !== null): ?><span class="life<?= $expiry['soon'] ? ' soon' : '' ?>" aria-hidden="true"><i style="width:<?= (int)round($expiry['fraction'] * 100) ?>%"></i></span><?php endif; ?>
     <span class="cap"><b><?= h($name) ?></b><?= h($caption) ?></span>
@@ -877,6 +926,14 @@ h2{margin:0}
 .tile:hover .cap,.tile:focus-within .cap{opacity:1}
 .tile .by{position:absolute;left:8px;bottom:18px;width:22px;height:22px;font-size:9px;border:2px solid rgba(255,255,255,.92);pointer-events:none}
 .tile:hover .by{opacity:0}
+.tile .shr{position:absolute;right:8px;bottom:18px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.5);border:2px solid rgba(255,255,255,.92);color:#fff;display:grid;place-items:center;pointer-events:none}
+.tile .shr[hidden]{display:none}.tile .shr svg{width:11px;height:11px;stroke-width:2.6}
+.tile:hover .shr{opacity:0}
+.qshare{position:absolute;top:8px;right:8px;z-index:2;width:30px;height:30px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;display:grid;place-items:center;cursor:pointer;opacity:0;transition:opacity .12s}
+.qshare svg{width:15px;height:15px}.qshare:hover{background:var(--accent)}.qshare:disabled{cursor:progress}
+.tile:hover .qshare,.tile:focus-within .qshare{opacity:1}
+.tile:hover .badge{opacity:0}.grid.selecting .qshare{display:none}
+@media(hover:none){.qshare{opacity:1}.tile .shr{opacity:1}.tile:hover .badge{opacity:1}.tile .qshare~.badge{right:44px}}
 .life{position:absolute;left:8px;right:8px;bottom:7px;height:5px;border-radius:9px;background:rgba(0,0,0,.45);box-shadow:0 0 0 1px rgba(255,255,255,.18);pointer-events:none}
 .life i{display:block;height:100%;border-radius:9px;background:#fff}
 .life.soon i{background:#ffb347}
@@ -1058,6 +1115,19 @@ function pageEnd(): void {
   });
 
   async function copyText(text,message,prompt){try{await navigator.clipboard.writeText(text);toast(message)}catch{window.prompt(prompt,text)}}
+  $$('[data-quick-share]').forEach(button=>button.addEventListener('click',async event=>{
+    event.preventDefault();event.stopPropagation();
+    if(button.disabled)return;button.disabled=true;
+    try{
+      const body=new FormData();body.append('csrf',document.querySelector('input[name="csrf"]').value);body.append('id',button.dataset.quickShare);
+      const response=await fetch('?action=quick_share',{method:'POST',body,headers:{Accept:'application/json'},credentials:'same-origin'});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||!result.path){toast(result.error||'The share link could not be created.');return}
+      const mark=button.closest('.tile').querySelector('.shr');if(mark)mark.hidden=false;
+      await copyText(new URL(result.path,location.href).href,result.created?'Share link created and copied':'Share link copied','Copy this link:');
+    }catch{toast('The share link could not be created.')}
+    finally{button.disabled=false}
+  }));
   $$('[data-copy-link]').forEach(button=>button.addEventListener('click',()=>copyText(new URL(button.dataset.copyLink,location.href).href,'Link copied','Copy this link:')));
   $$('.share-url').forEach(input=>{try{input.value=new URL(input.dataset.path,location.href).href}catch{}input.addEventListener('focus',()=>input.select())});
 

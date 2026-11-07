@@ -1177,6 +1177,7 @@ function pageEnd(): void {
     const plural=(n,word)=>n+' '+word+(n===1?'':'s');
     function keepDate(){const value=form.querySelector('[name="retention"]:checked').value;if(value==='never')return null;const d=new Date(Date.now()+Number(value)*864e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
     function updateHint(){const date=keepDate();hint.textContent=date?'They will be deleted on '+date+'. Backups and copies elsewhere are not removed.':'They stay until someone deletes them.'}
+    if(!form.querySelector('[name="retention"]:checked')){const fallback=form.querySelector('[name="retention"][value="never"]');if(fallback)fallback.checked=true}
     const remember=$('#rememberDefault'),rememberRow=$('#rememberRow'),savedDefault=form.querySelector('.keep').dataset.default;
     function syncRemember(){const same=form.querySelector('[name="retention"]:checked').value===savedDefault;rememberRow.hidden=same;if(same)remember.checked=false}
     $$('[name="retention"]',form).forEach(radio=>radio.addEventListener('change',()=>{updateHint();syncRemember()}));updateHint();syncRemember();

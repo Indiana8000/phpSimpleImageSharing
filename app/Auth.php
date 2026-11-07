@@ -48,8 +48,8 @@ final class Auth
         // insert. SQLite serializes competing writers, so parallel first visits
         // cannot create duplicate bootstrap accounts.
         $statement = $pdo->prepare(
-            'INSERT INTO users (id, username, display_name, password_hash, role, active, created_at)
-             SELECT :id, :username, :display_name, :password_hash, \'admin\', 1, :created_at
+            'INSERT INTO users (id, username, display_name, password_hash, role, active, default_retention, created_at)
+             SELECT :id, :username, :display_name, :password_hash, \'admin\', 1, \'never\', :created_at
              WHERE NOT EXISTS (SELECT 1 FROM users LIMIT 1)'
         );
         $statement->execute([
@@ -166,8 +166,8 @@ final class Auth
             'created_at' => time(),
         ];
         $statement = $pdo->prepare(
-            'INSERT INTO users (id, username, display_name, password_hash, role, active, created_at)
-             VALUES (:id, :username, :display_name, :password_hash, :role, 1, :created_at)'
+            'INSERT INTO users (id, username, display_name, password_hash, role, active, default_retention, created_at)
+             VALUES (:id, :username, :display_name, :password_hash, :role, 1, \'never\', :created_at)'
         );
         $statement->execute([
             ':id' => $user['id'],

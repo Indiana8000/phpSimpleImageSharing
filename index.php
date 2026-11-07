@@ -620,6 +620,7 @@ if ($action === 'detail') {
       <?php if ($notice): ?><p class="banner" role="status"><?= h($notice) ?></p><?php endif; ?>
 <?php if ($canManage) { $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; } ?>
       <dl>
+        <dt>File name</dt><dd class="fname"><?= h((string)$detail['original_name']) ?></dd>
         <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
         <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
         <dt>Size</dt><dd><?= h(formatBytes((int)$detail['size_bytes'])) ?></dd>
@@ -1033,7 +1034,7 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .nav:hover{background:rgba(255,255,255,.26)}.nav.l{left:22px}.nav.r{right:22px}
 .panel{padding:6px 18px 32px}
 .panel dl{margin:0 0 18px;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
-.panel dt{color:#98a0b0}.panel dd{margin:0}
+.panel dt{color:#98a0b0}.panel dd{margin:0;min-width:0}.panel dd.fname{overflow-wrap:anywhere}
 .panel .btn{background:#1d2129;border-color:#2a2f39;color:#eceef3;width:100%;margin-bottom:8px}
 .panel .btn:hover{background:#262b36}
 .panel .btn.primary{background:#8590ff;border-color:#8590ff;color:#0d1030}

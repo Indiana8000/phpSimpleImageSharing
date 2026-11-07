@@ -616,8 +616,7 @@ if ($action === 'detail') {
       <?php if ($nextUrl !== null): ?><a class="nav r" href="<?= h($nextUrl) ?>" rel="next" aria-label="Next photo"><?= icon('next') ?></a><?php endif; ?>
     </div>
     <aside class="panel">
-      <?php if ($error): ?><p class="banner error" role="alert"><?= h($error) ?></p><?php endif; ?>
-      <?php if ($notice): ?><p class="banner" role="status"><?= h($notice) ?></p><?php endif; ?>
+      <?php if ($error || $notice): ?><p class="banner<?= $error ? ' error' : '' ?> js-hide" role="<?= $error ? 'alert' : 'status' ?>" data-toast="<?= h((string)($error ?: $notice)) ?>" data-toast-ms="<?= $error ? 5000 : 2400 ?>"><?= h((string)($error ?: $notice)) ?></p><?php endif; ?>
 <?php if ($canManage) { $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; } ?>
       <dl>
         <dt>File name</dt><dd class="fname"><?= h((string)$detail['original_name']) ?></dd>
@@ -914,7 +913,7 @@ h2{margin:0}
 .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
 .search input{width:100%;height:40px;padding:0 12px 0 38px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
 .field{height:40px;padding:0 12px;border-radius:var(--r-ctl);border:1px solid var(--line);background:var(--surface)}
-.js .nojs{display:none}
+.js .nojs{display:none}.js .js-hide{display:none}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
 .tile{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--quiet)}
@@ -1022,6 +1021,7 @@ fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
 
 body.viewer-page{background:#0c0e12;color:#eceef3}
 .viewer-page :focus-visible{outline-color:#8590ff}
+.viewer-page .toast{background:#eceef3;color:#0c0e12;box-shadow:0 6px 20px rgba(0,0,0,.45)}
 .vwrap{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
 .vtop{display:flex;align-items:center;gap:8px;padding:10px 12px}
 .vtop .icon-btn{color:#fff}.vtop .icon-btn:hover{background:rgba(255,255,255,.12)}
@@ -1089,7 +1089,8 @@ function pageEnd(): void {
 (()=>{
   const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>Array.from(r.querySelectorAll(s)),root=document.documentElement,themeKey='phpSimpleImageSharing-theme';
   let toastTimer;
-  function toast(message){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400)}
+  function toast(message,ms=2400){const el=$('#toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),ms)}
+  $$('[data-toast]').forEach(note=>{toast(note.dataset.toast,Number(note.dataset.toastMs)||2400)});
 
   const themeButton=$('#themeToggle');let theme='system';
   try{const saved=localStorage.getItem(themeKey);if(saved==='light'||saved==='dark')theme=saved}catch{}

@@ -904,7 +904,8 @@ h2{margin:0}
 
 dialog.modal{border:0;padding:0;border-radius:20px;background:var(--surface);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100vh - 24px);box-shadow:0 24px 60px rgba(0,0,0,.35)}
 dialog.modal::backdrop{background:rgba(8,10,14,.55)}
-@media(max-width:640px){dialog.modal{margin:auto auto 0;border-radius:20px 20px 0 0;width:100%;max-width:none}}
+#uploadDialog{width:min(720px,calc(100% - 24px))}
+@media(max-width:640px){#uploadDialog,dialog.modal{margin:auto auto 0;border-radius:20px 20px 0 0;width:100%;max-width:none}}
 .sheet-in{padding:22px 20px 20px}
 .sheet-in h2{font-size:20px;letter-spacing:-.02em;margin-bottom:4px}
 .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
@@ -913,8 +914,9 @@ dialog.modal::backdrop{background:rgba(8,10,14,.55)}
 .zone:hover{border-color:var(--accent);background:var(--tint)}.zone strong{color:var(--ink)}.zone svg{width:26px;height:26px}
 .queue{margin:6px 0}.queue-summary{font-size:13px;color:var(--muted);margin-bottom:6px}
 .queue-items{display:grid;gap:6px;max-height:34vh;overflow:auto}
-.qi{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:center;padding:6px;border-radius:12px;background:var(--bg)}
+.qi{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px;border-radius:12px;background:var(--bg)}
 .qi img{width:40px;height:40px;object-fit:cover;border-radius:8px;background:var(--quiet)}
+.qx{width:30px;height:30px;border:0;border-radius:50%;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer}.qx:hover{background:var(--quiet);color:var(--danger)}dialog[data-busy] .qx{visibility:hidden}
 .qn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qs{font-size:12px;color:var(--muted)}.qs.ok{color:var(--ok)}.qs.fail{color:var(--danger)}
 .qt{height:4px;border-radius:9px;background:var(--line);margin-top:5px;overflow:hidden}.qt i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
@@ -1091,19 +1093,26 @@ function pageEnd(): void {
     function refresh(){const pending=files.filter(f=>!f.done).length,failed=files.some(f=>f.failed);button.disabled=busy||pending===0;button.textContent=pending===0?'Upload':(failed?'Retry '+plural(pending,'photo'):'Upload '+plural(pending,'photo'))}
     function clear(){for(const img of $$('img',items))if(img.src.startsWith('blob:'))URL.revokeObjectURL(img.src);files=[];items.replaceChildren();queue.hidden=true;summary.textContent='';refresh()}
     function addFiles(list){
-      clear();
+      if(busy)return;
+      files=files.filter(f=>!f.done);for(const r of Array.from(items.children))if(!files.some(f=>f.row===r))r.remove();
       for(const file of Array.from(list||[])){
+        if(files.some(f=>f.file.name===file.name&&f.file.size===file.size&&f.file.lastModified===file.lastModified))continue;
         const row=document.createElement('div');row.className='qi';
         const thumb=document.createElement('img');thumb.alt='';if(file.type.startsWith('image/'))thumb.src=URL.createObjectURL(file);else thumb.hidden=true;
         const body=document.createElement('div');
         const name=document.createElement('div');name.className='qn';name.textContent=file.name;
         const status=document.createElement('div');status.className='qs';status.textContent='Ready';status.setAttribute('aria-live','polite');
         const track=document.createElement('div');track.className='qt';track.setAttribute('role','progressbar');track.setAttribute('aria-label','Upload progress for '+file.name);track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow','0');
-        const fill=document.createElement('i');track.append(fill);body.append(name,status,track);row.append(thumb,body);items.append(row);
-        files.push({file,status,fill,track,done:false,failed:false});
+        const fill=document.createElement('i');track.append(fill);body.append(name,status,track);
+        const drop=document.createElement('button');drop.type='button';drop.className='qx';drop.setAttribute('aria-label','Remove '+file.name);drop.textContent='×';
+        const entry={file,row,status,fill,track,done:false,failed:false};
+        drop.addEventListener('click',()=>{if(busy)return;if(thumb.src.startsWith('blob:'))URL.revokeObjectURL(thumb.src);row.remove();files=files.filter(f=>f!==entry);syncQueue()});
+        row.append(thumb,body,drop);items.append(row);
+        files.push(entry);
       }
-      queue.hidden=files.length===0;summary.textContent=files.length?plural(files.length,'photo')+' ready':'';refresh();
+      syncQueue();
     }
+    function syncQueue(){queue.hidden=files.length===0;summary.textContent=files.length?plural(files.filter(f=>!f.done).length,'photo')+' ready':'';refresh()}
     $$('[data-add-photos]').forEach(control=>control.addEventListener('click',()=>input.click()));
     input.addEventListener('change',()=>{if(input.files.length){addFiles(input.files);if(!dialog.open)dialog.showModal()}input.value=''});
     dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault()});

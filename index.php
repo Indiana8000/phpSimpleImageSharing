@@ -858,6 +858,7 @@ h2{margin:0}
 .seg button,.seg label{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted);position:relative;cursor:pointer}
 .seg button[aria-pressed=true],.seg input:checked+span{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
 .seg.wrap{flex-wrap:wrap;border-radius:18px}.seg label{padding:0}.seg label span{display:block;padding:6px 14px;border-radius:999px}
+.keep .seg{display:flex;width:100%}.keep .seg label{flex:1 1 0;min-width:72px}.keep .seg label span{text-align:center;white-space:nowrap}
 .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
 .seg label:focus-within span{outline:2px solid var(--accent);outline-offset:2px}
 .search{position:relative;flex:1;min-width:150px;max-width:340px}

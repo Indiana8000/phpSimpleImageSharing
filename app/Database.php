@@ -93,6 +93,7 @@ final class Database
                 role TEXT NOT NULL CHECK (role IN ('admin', 'member')),
                 active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
                 auth_version INTEGER NOT NULL DEFAULT 0,
+                default_retention TEXT NOT NULL DEFAULT 'never',
                 created_at INTEGER NOT NULL
             )
             SQL);

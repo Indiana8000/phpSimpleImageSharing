@@ -267,6 +267,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Choose a valid retention period.');
             }
             $expiresAt = $retentionDays === 'never' ? null : time() + ((int)$retentionDays * 86400);
+            if (($_POST['remember_default'] ?? '') === '1') {
+                $pdo->prepare('UPDATE users SET default_retention = :value WHERE id = :id')->execute([':value' => $retentionDays, ':id' => $currentUser['id']]);
+            }
             $uploads = normalizeUploads($_FILES['images'] ?? ($_FILES['image'] ?? null));
             if ($uploads === []) $uploads[] = ['name' => '', 'tmp_name' => '', 'error' => UPLOAD_ERR_NO_FILE, 'size' => 0, 'type' => ''];
             $uploadResults = [];
@@ -747,14 +750,16 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     <p class="sub">JPEG, PNG, GIF or WebP, up to <?= h((string)round($maxBytes / 1024 / 1024)) ?> MiB each.</p>
     <button type="button" class="zone" data-add-photos><?= icon('upload') ?><strong>Drop photos here</strong><span>or choose from your device</span></button>
     <div class="queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div>
-    <fieldset class="keep">
+<?php $savedRetention = userDefaultRetention($pdo, (string)$currentUser['id']); ?>
+    <fieldset class="keep" data-default="<?= h($savedRetention) ?>">
       <legend>Keep these photos</legend>
       <div class="seg wrap">
 <?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
-        <label><input type="radio" name="retention" value="<?= h((string)$retentionValue) ?>"<?= (string)$retentionValue === 'never' ? ' checked' : '' ?>><span><?= h($retentionLabel) ?></span></label>
+        <label><input type="radio" name="retention" value="<?= h((string)$retentionValue) ?>"<?= (string)$retentionValue === $savedRetention ? ' checked' : '' ?>><span><?= h($retentionLabel) ?></span></label>
 <?php endforeach; ?>
       </div>
       <p class="hint" id="retentionHint"></p>
+      <label class="remember" id="rememberRow" hidden><input type="checkbox" id="rememberDefault"> Use this as my default</label>
     </fieldset>
     <div class="foot"><button type="button" class="btn ghost" data-close>Cancel</button><button class="btn primary" id="uploadButton" disabled>Upload</button></div>
   </form>
@@ -829,6 +834,14 @@ function cleanQuery(array $params): string {
 /** Retention choices in days (keys) with their labels. Months are counted as 30 days. */
 function retentionOptions(): array {
     return ['never' => 'Forever', '1' => '1 day', '7' => '7 days', '30' => '30 days', '60' => '2 months', '90' => '3 months', '180' => '6 months'];
+}
+
+/** The retention period a user preselects for new uploads; falls back to Forever. */
+function userDefaultRetention(PDO $pdo, string $userId): string {
+    $statement = $pdo->prepare('SELECT default_retention FROM users WHERE id = :id LIMIT 1');
+    $statement->execute([':id' => $userId]);
+    $value = (string)$statement->fetchColumn();
+    return array_key_exists($value, retentionOptions()) ? $value : 'never';
 }
 
 function pageStart(string $title, string $variant = 'app'): void {
@@ -965,6 +978,7 @@ dialog.modal::backdrop{background:rgba(8,10,14,.55)}
 .qs{font-size:12px;color:var(--muted)}.qs.ok{color:var(--ok)}.qs.fail{color:var(--danger)}
 .qt{height:4px;border-radius:9px;background:var(--line);margin-top:5px;overflow:hidden}.qt i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s}
 fieldset.keep{border:0;padding:0;margin:16px 0 0}
+.remember{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--muted);cursor:pointer}.remember[hidden]{display:none}
 fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
 .guide{display:grid;gap:10px;margin:14px 0 0;padding-left:20px;font-size:14px}.guide strong{display:block}.guide span{color:var(--muted)}
 
@@ -1163,7 +1177,9 @@ function pageEnd(): void {
     const plural=(n,word)=>n+' '+word+(n===1?'':'s');
     function keepDate(){const value=form.querySelector('[name="retention"]:checked').value;if(value==='never')return null;const d=new Date(Date.now()+Number(value)*864e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
     function updateHint(){const date=keepDate();hint.textContent=date?'They will be deleted on '+date+'. Backups and copies elsewhere are not removed.':'They stay until someone deletes them.'}
-    $$('[name="retention"]',form).forEach(radio=>radio.addEventListener('change',updateHint));updateHint();
+    const remember=$('#rememberDefault'),rememberRow=$('#rememberRow'),savedDefault=form.querySelector('.keep').dataset.default;
+    function syncRemember(){const same=form.querySelector('[name="retention"]:checked').value===savedDefault;rememberRow.hidden=same;if(same)remember.checked=false}
+    $$('[name="retention"]',form).forEach(radio=>radio.addEventListener('change',()=>{updateHint();syncRemember()}));updateHint();syncRemember();
     function refresh(){const pending=files.filter(f=>!f.done).length,failed=files.some(f=>f.failed);button.disabled=busy||pending===0;button.textContent=pending===0?'Upload':(failed?'Retry '+plural(pending,'photo'):'Upload '+plural(pending,'photo'))}
     function clear(){for(const img of $$('img',items))if(img.src.startsWith('blob:'))URL.revokeObjectURL(img.src);files=[];items.replaceChildren();queue.hidden=true;summary.textContent='';refresh()}
     function addFiles(list){
@@ -1200,7 +1216,7 @@ function pageEnd(): void {
     document.addEventListener('drop',event=>{if(!hasFiles(event))return;event.preventDefault();depth=0;root.classList.remove('dragging');if(busy||$('dialog[open]:not(#uploadDialog)'))return;addFiles(event.dataTransfer.files);if(!dialog.open)dialog.showModal()});
 
     function upload(entry){return new Promise(resolve=>{
-      const body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]:checked').value);body.append('images[]',entry.file,entry.file.name);
+      const body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]:checked').value);if(remember.checked)body.append('remember_default','1');body.append('images[]',entry.file,entry.file.name);
       const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=120000;xhr.setRequestHeader('Accept','application/json');
       const fail=text=>{entry.status.className='qs fail';entry.status.textContent=text;resolve(false)};
       xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});

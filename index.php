@@ -646,6 +646,7 @@ if ($action === 'detail') {
       <div class="share-result">
         <label for="shareUrl">Share link</label>
         <div class="link"><input id="shareUrl" class="share-url" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
+        <p class="hint">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
       </div>
 <?php endif; ?>
       <form method="post" action="?action=create_share">
@@ -658,7 +659,9 @@ if ($action === 'detail') {
         <button class="btn danger"><?= icon('close') ?>Stop sharing</button>
       </form>
 <?php endif; ?>
+<?php if ($shownShare === ''): ?>
       <p class="hint" style="margin-top:8px">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
+<?php endif; ?>
 <?php endif; ?>
       <a class="btn" href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>"><?= icon('download') ?>Download original</a>
       <button type="button" class="btn" data-copy-link="<?= h($detailImageUrl) ?>"><?= icon('copy') ?>Copy link for signed-in friends</button>

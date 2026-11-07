@@ -626,11 +626,10 @@ if ($action === 'detail') {
         <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
       </dl>
 <?php if ($canManage): ?>
-      <details class="retention">
-        <summary class="btn sm">Change how long it is kept</summary>
-        <form class="retention-form" method="post" action="?action=set_retention">
-          <?= $shareFields ?>
-          <label class="sr" for="retentionSelect">Keep this photo</label>
+      <form class="share-result" method="post" action="?action=set_retention">
+        <?= $shareFields ?>
+        <label for="retentionSelect">Keep this photo</label>
+        <div class="link">
           <select class="field" id="retentionSelect" name="retention">
             <option value="keep" selected>Keep as is (<?= $detailExpiry === null ? 'forever' : h($detailExpiry['date']) ?>)</option>
 <?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
@@ -638,9 +637,9 @@ if ($action === 'detail') {
 <?php endforeach; ?>
           </select>
           <button class="btn primary sm">Save</button>
-        </form>
+        </div>
         <p class="hint">Counts from today. The photo and its share link are deleted at the end. Choose Forever to turn automatic deletion off.</p>
-      </details>
+      </form>
 <?php endif; ?>
 <?php if ($canManage): ?>
 <?php if ($shownShare !== ''): ?>
@@ -1046,11 +1045,10 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .share-result .link{display:flex;gap:8px}
 .share-result input{flex:1;min-width:0;height:38px;border-radius:9px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px}
 .share-result .btn{width:auto;margin:0}
+.share-result .hint{margin:8px 0 0}
+.panel form.share-result{margin:0 0 14px}
 .panel form{margin:0}
 .panel .field{height:38px;border-radius:10px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px;flex:1;min-width:0}
-.retention{margin:0 0 18px}.retention summary{display:flex;cursor:pointer}
-.retention-form{display:flex;gap:8px;margin-top:2px}.retention-form .btn{width:auto;margin:0}
-.retention .hint{margin:8px 0 0}
 
 @media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,1fr);gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}

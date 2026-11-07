@@ -72,6 +72,7 @@ data_dir/
 - [x] Add next/previous navigation, original download, and private-link copying to the detail view.
 - [x] Sort by newest/oldest upload and search filenames.
 - [x] Add multi-select with bulk actions to copy private links and delete selected images.
+- [x] Add a bulk "Share links" action that copies the share links of the selected photos and creates links for those that have none (own photos only; administrators may share all).
 - [x] Confirm deletion with the filename.
 - [x] Show a clear deletion success or error message.
 - [x] Add an empty state and pagination for larger collections.

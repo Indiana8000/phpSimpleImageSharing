@@ -306,46 +306,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failureCount = count($uploadResults) - $successCount;
             if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'photo uploaded.' : 'photos uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
-        } elseif ($action === 'quick_share') {
-            // Gallery shortcut: return the active share link, creating one only if none exists.
+        } elseif ($action === 'quick_share' || $action === 'quick_share_bulk') {
+            // Gallery shortcuts: return the active share link of each photo, creating one only where none exists.
             header('Content-Type: application/json; charset=utf-8');
             header('Cache-Control: private, no-store');
-            $mediaId = (string)($_POST['id'] ?? '');
-            $now = time();
-            $quickMedia = false;
-            if (preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) {
-                $find = $pdo->prepare('SELECT id, owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
-                $find->execute([':id' => $mediaId]);
-                $quickMedia = $find->fetch(PDO::FETCH_ASSOC);
+            $rawIds = $action === 'quick_share' ? [$_POST['id'] ?? ''] : ($_POST['ids'] ?? []);
+            $quickIds = is_array($rawIds) ? array_slice(array_values(array_unique(array_filter($rawIds, 'is_string'))), 0, 200) : [];
+            $quickLinks = [];
+            $quickSkipped = 0;
+            try {
+                foreach ($quickIds as $quickId) {
+                    $link = ensureShareLink($pdo, $currentUser, $quickId, time());
+                    if ($link === null) { $quickSkipped++; continue; }
+                    $quickLinks[] = $link + ['id' => $quickId];
+                }
+            } catch (Throwable $exception) {
+                error_log('phpSimpleImageSharing quick share error: ' . $exception->getMessage());
+                http_response_code(500);
+                echo json_encode(['error' => 'The share link could not be created.']); exit;
             }
-            if (!is_array($quickMedia) || ($quickMedia['expires_at'] !== null && (int)$quickMedia['expires_at'] <= $now)
-                || ($currentUser['role'] !== 'admin' && $quickMedia['owner_id'] !== $currentUser['id'])) {
+            if ($quickLinks === []) {
                 http_response_code(403);
                 echo json_encode(['error' => 'You cannot share this photo.']); exit;
             }
-            $existing = $pdo->prepare("SELECT token FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND token <> '' AND (expires_at IS NULL OR expires_at > :now) ORDER BY created_at DESC LIMIT 1");
-            $existing->execute([':id' => $mediaId, ':now' => $now]);
-            $quickToken = $existing->fetchColumn();
-            $created = false;
-            if (!is_string($quickToken) || $quickToken === '') {
-                $quickToken = generateShareToken();
-                $created = true;
-                $pdo->beginTransaction();
-                try {
-                    $pdo->prepare('UPDATE share_links SET revoked_at = :now WHERE media_id = :id AND revoked_at IS NULL')->execute([':now' => $now, ':id' => $mediaId]);
-                    $pdo->prepare('INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at) VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)')->execute([
-                        ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId, ':token_hash' => hash('sha256', $quickToken),
-                        ':token' => $quickToken, ':created_at' => $now, ':expires_at' => $quickMedia['expires_at'],
-                    ]);
-                    $pdo->commit();
-                } catch (Throwable $exception) {
-                    if ($pdo->inTransaction()) $pdo->rollBack();
-                    error_log('phpSimpleImageSharing quick share error: ' . $exception->getMessage());
-                    http_response_code(500);
-                    echo json_encode(['error' => 'The share link could not be created.']); exit;
-                }
-            }
-            echo json_encode(['path' => sharePath($quickToken), 'created' => $created]); exit;
+            echo json_encode($action === 'quick_share'
+                ? ['path' => $quickLinks[0]['path'], 'created' => $quickLinks[0]['created']]
+                : ['links' => $quickLinks, 'skipped' => $quickSkipped]);
+            exit;
         } elseif ($action === 'create_share' || $action === 'revoke_share' || $action === 'set_retention') {
             $mediaId = (string)($_POST['id'] ?? '');
             if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) throw new InvalidArgumentException('Invalid media ID.');
@@ -746,6 +733,7 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
   <input type="hidden" name="csrf" value="<?= h(csrf()) ?>"><input type="hidden" name="return_q" value="<?= h($searchTerm) ?>"><input type="hidden" name="return_sort" value="<?= h($sortOrder) ?>"><input type="hidden" name="return_filter" value="<?= h($filter) ?>"><input type="hidden" name="return_page" value="<?= $galleryPage ?>">
   <b id="selectedCount" role="status" aria-live="polite">0 selected</b>
   <button type="button" class="btn sm" id="selectVisible">Select page</button>
+  <button class="btn sm" name="bulk_action" value="share" title="Copy share links. Photos without one get a new link."><?= icon('link') ?>Share links</button>
   <button class="btn sm" name="bulk_action" value="copy"><?= icon('copy') ?>Copy links</button>
   <button class="btn sm" name="bulk_action" value="delete"><?= icon('trash') ?>Delete</button>
   <button type="button" class="icon-btn" id="clearSel" aria-label="Clear selection"><?= icon('close') ?></button>
@@ -1141,9 +1129,26 @@ function pageEnd(): void {
     bulk.addEventListener('submit',async event=>{
       if(bulk.dataset.ok){delete bulk.dataset.ok;return}
       const action=event.submitter&&event.submitter.value,chosen=selected();
-      if(action!=='copy'&&action!=='delete')return;
+      if(action!=='copy'&&action!=='delete'&&action!=='share')return;
       event.preventDefault();
       if(chosen.length===0){toast('Select at least one photo');return}
+      if(action==='share'){
+        const trigger=event.submitter;trigger.disabled=true;
+        try{
+          const body=new FormData(bulk);body.delete('bulk_action');chosen.forEach(box=>body.append('ids[]',box.value));
+          const response=await fetch('?action=quick_share_bulk',{method:'POST',body,headers:{Accept:'application/json'},credentials:'same-origin'});
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok||!Array.isArray(result.links)){toast(result.error||'The share links could not be created.');return}
+          const created=result.links.filter(link=>link.created).length,skipped=result.skipped||0;
+          for(const link of result.links){const tile=document.querySelector('[data-quick-share="'+link.id+'"]');const mark=tile&&tile.closest('.tile').querySelector('.shr');if(mark)mark.hidden=false}
+          const text=result.links.map(link=>new URL(link.path,location.href).href).join('\n');
+          const parts=[result.links.length+(result.links.length===1?' share link copied':' share links copied')];
+          if(created)parts.push(created+' new');if(skipped)parts.push(skipped+' skipped, not yours');
+          await copyText(text,parts.join(', '),'Copy these links:');
+        }catch{toast('The share links could not be created.')}
+        finally{trigger.disabled=false}
+        return;
+      }
       if(action==='copy'){const text=chosen.map(box=>new URL('?action=image&id='+encodeURIComponent(box.value),location.href).href).join('\n');copyText(text,chosen.length+(chosen.length===1?' link copied':' links copied'),'Copy these links:');return}
       const n=chosen.length;
       if(await ask('Delete '+n+(n===1?' photo?':' photos?'),'This removes them and their share links for everyone. You can only delete your own photos unless you are an administrator. It cannot be undone.','Delete')){bulk.dataset.ok='1';bulk.requestSubmit(event.submitter)}
@@ -1263,6 +1268,43 @@ function generateShareToken(): string
     }
     if ($bits > 0) $encoded .= $alphabet[($buffer << (5 - $bits)) & 31];
     return $encoded;
+}
+
+/**
+ * Return the active share link of a photo, creating one if none exists.
+ * Returns null when the photo is missing, expired or not manageable by the user.
+ *
+ * @return array{path: string, created: bool}|null
+ */
+function ensureShareLink(PDO $pdo, array $user, string $mediaId, int $now): ?array
+{
+    if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) return null;
+    $find = $pdo->prepare('SELECT owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
+    $find->execute([':id' => $mediaId]);
+    $media = $find->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($media) || ($media['expires_at'] !== null && (int)$media['expires_at'] <= $now)
+        || ($user['role'] !== 'admin' && $media['owner_id'] !== $user['id'])) {
+        return null;
+    }
+    $existing = $pdo->prepare("SELECT token FROM share_links WHERE media_id = :id AND revoked_at IS NULL AND token <> '' AND (expires_at IS NULL OR expires_at > :now) ORDER BY created_at DESC LIMIT 1");
+    $existing->execute([':id' => $mediaId, ':now' => $now]);
+    $token = $existing->fetchColumn();
+    if (is_string($token) && $token !== '') return ['path' => sharePath($token), 'created' => false];
+
+    $token = generateShareToken();
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare('UPDATE share_links SET revoked_at = :now WHERE media_id = :id AND revoked_at IS NULL')->execute([':now' => $now, ':id' => $mediaId]);
+        $pdo->prepare('INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at) VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)')->execute([
+            ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId, ':token_hash' => hash('sha256', $token),
+            ':token' => $token, ':created_at' => $now, ':expires_at' => $media['expires_at'],
+        ]);
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        throw $exception;
+    }
+    return ['path' => sharePath($token), 'created' => true];
 }
 
 function sharePath(string $token): string

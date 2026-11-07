@@ -704,12 +704,13 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
   <button type="button" class="icon-btn" id="clearSel" aria-label="Clear selection"><?= icon('close') ?></button>
 </form>
 <?php endif; ?>
+<input class="sr" id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
 <dialog class="modal" id="uploadDialog" aria-labelledby="uploadTitle">
   <form class="sheet-in" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
     <h2 id="uploadTitle">Add photos</h2>
     <p class="sub">JPEG, PNG, GIF or WebP, up to <?= h((string)round($maxBytes / 1024 / 1024)) ?> MiB each.</p>
-    <label class="zone"><?= icon('upload') ?><strong>Drop photos here</strong><span>or choose from your device</span><input class="sr" id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp" multiple></label>
+    <button type="button" class="zone" data-add-photos><?= icon('upload') ?><strong>Drop photos here</strong><span>or choose from your device</span></button>
     <div class="queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div>
     <fieldset class="keep">
       <legend>Keep these photos</legend>
@@ -908,7 +909,7 @@ dialog.modal::backdrop{background:rgba(8,10,14,.55)}
 .sheet-in h2{font-size:20px;letter-spacing:-.02em;margin-bottom:4px}
 .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
 .foot form{display:contents}
-.zone{display:grid;place-items:center;gap:4px;margin:14px 0;padding:20px;border:2px dashed var(--line);border-radius:14px;text-align:center;color:var(--muted);cursor:pointer}
+.zone{font:inherit;background:none;width:100%;display:grid;place-items:center;gap:4px;margin:14px 0;padding:20px;border:2px dashed var(--line);border-radius:14px;text-align:center;color:var(--muted);cursor:pointer}
 .zone:hover{border-color:var(--accent);background:var(--tint)}.zone strong{color:var(--ink)}.zone svg{width:26px;height:26px}
 .queue{margin:6px 0}.queue-summary{font-size:13px;color:var(--muted);margin-bottom:6px}
 .queue-items{display:grid;gap:6px;max-height:34vh;overflow:auto}

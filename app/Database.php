@@ -46,26 +46,6 @@ final class Database
         return $pdo;
     }
 
-    /** Return a string setting stored in the database, or null if absent. */
-    public static function getMetadata(PDO $pdo, string $key): ?string
-    {
-        $statement = $pdo->prepare('SELECT value FROM app_metadata WHERE key = :key');
-        $statement->execute(['key' => $key]);
-        $value = $statement->fetchColumn();
-
-        return $value === false ? null : (string)$value;
-    }
-
-    /** Insert or update an application metadata value. */
-    public static function setMetadata(PDO $pdo, string $key, string $value): void
-    {
-        $statement = $pdo->prepare(
-            'INSERT INTO app_metadata (key, value) VALUES (:key, :value) '
-            . 'ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-        );
-        $statement->execute(['key' => $key, 'value' => $value]);
-    }
-
     /** Apply any schema migrations required by this application version. */
     private static function migrate(PDO $pdo): void
     {
@@ -110,13 +90,6 @@ final class Database
 
     private static function createInitialSchema(PDO $pdo): void
     {
-        $pdo->exec(<<<'SQL'
-            CREATE TABLE app_metadata (
-                key TEXT PRIMARY KEY NOT NULL,
-                value TEXT NOT NULL
-            )
-            SQL);
-
         $pdo->exec(<<<'SQL'
             CREATE TABLE users (
                 id TEXT PRIMARY KEY NOT NULL,

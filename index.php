@@ -55,7 +55,6 @@ try {
     $pdo = Database::connect($dataDir);
     Auth::bootstrapInitialAdmin($pdo, $initialPasswordHash, $initialUsername, $initialDisplayName);
     $mediaStorage = new MediaStorage($dataDir);
-    importLegacyMedia($pdo, $mediaStorage, $dataDir);
 } catch (Throwable $exception) {
     error_log('phpSimpleImageSharing startup error: ' . $exception->getMessage());
     http_response_code(503);
@@ -1227,60 +1226,6 @@ JS;
     echo '</script></body></html>';
 }
 
-
-/** Copy the old flat-file gallery into the first administrator's private folder once. */
-function importLegacyMedia(PDO $pdo, MediaStorage $storage, string $dataDir): void
-{
-    if (Database::getMetadata($pdo, 'legacy_media_imported') === '1') return;
-    $lockPath = $dataDir . DIRECTORY_SEPARATOR . '.legacy-media-import.lock';
-    if (is_link($lockPath)) throw new RuntimeException('The legacy import lock must not be a symbolic link.');
-    $lock = @fopen($lockPath, 'c');
-    if ($lock === false) throw new RuntimeException('Could not create the legacy import lock.');
-    @chmod($lockPath, 0600);
-    try {
-        if (!flock($lock, LOCK_EX)) throw new RuntimeException('Could not lock the legacy media import.');
-        if (Database::getMetadata($pdo, 'legacy_media_imported') === '1') return;
-        $ownerId = $pdo->query("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1")->fetchColumn();
-        if (!is_string($ownerId) || $ownerId === '') throw new RuntimeException('An administrator is required to import existing media.');
-        $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
-        $exists = $pdo->prepare('SELECT 1 FROM media WHERE id = :id LIMIT 1');
-        $insert = $pdo->prepare(
-            'INSERT INTO media (id, owner_id, storage_name, original_name, mime, size_bytes, created_at)
-             VALUES (:id, :owner_id, :storage_name, :original_name, :mime, :size_bytes, :created_at)'
-        );
-        foreach (glob($dataDir . DIRECTORY_SEPARATOR . '*.json') ?: [] as $metaPath) {
-            if (is_link($metaPath) || !is_file($metaPath)) continue;
-            $legacyId = basename($metaPath, '.json');
-            if (!preg_match('/\A[a-f0-9]{64}\z/', $legacyId)) continue;
-            $meta = json_decode((string)@file_get_contents($metaPath), true);
-            if (!is_array($meta) || !isset($extensions[$meta['mime'] ?? ''])) continue;
-            $exists->execute([':id' => $legacyId]);
-            if ($exists->fetchColumn() !== false) continue;
-            $mime = (string)$meta['mime'];
-            try {
-                $copied = $storage->importLegacyFile($ownerId, $legacyId, $extensions[$mime], $mime, (string)($meta['name'] ?? 'image'));
-            } catch (InvalidArgumentException $exception) {
-                error_log('Skipped invalid legacy media ' . $legacyId . ': ' . $exception->getMessage());
-                continue;
-            }
-            if ($copied === null) continue;
-            try {
-                $insert->execute([
-                    ':id' => $copied['id'], ':owner_id' => $ownerId, ':storage_name' => $copied['storage_name'],
-                    ':original_name' => $copied['original_name'], ':mime' => $copied['mime'],
-                    ':size_bytes' => $copied['size_bytes'], ':created_at' => max(0, (int)($meta['created'] ?? time())),
-                ]);
-            } catch (Throwable $exception) {
-                $storage->delete($ownerId, $copied['storage_name']);
-                throw $exception;
-            }
-        }
-        Database::setMetadata($pdo, 'legacy_media_imported', '1');
-    } finally {
-        flock($lock, LOCK_UN);
-        fclose($lock);
-    }
-}
 
 /** Normalize PHP's flat or multi-file upload array into one record per file. */
 function normalizeUploads(mixed $upload): array

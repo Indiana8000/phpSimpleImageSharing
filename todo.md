@@ -86,7 +86,8 @@ data_dir/
 - [x] Use short share URLs with a 26-character token path; store a token hash in SQLite for lookup and compare it safely on access. The token itself is kept so the owner can copy the current link again (accepted trade-off: anyone who can read the database can already read the media files next to it).
 - [x] Use explicit Apache `mod_rewrite` rules to route token paths and legacy `/s/<token>` paths to `index.php`. PHP checks share status, expiration, and media permissions before serving anything.
 - [ ] If media routes include extensions, match only explicitly allowed image/video extensions and compare them with the media type in SQLite; never use a URL parameter as a file path.
-- [ ] Keep share options minimal: revoke a link and optionally set an expiration date.
+- [x] Let the owner revoke a link without creating a new one ("Stop sharing" on the photo page).
+- [ ] Optionally set an expiration date for a share link, separate from the photo's own expiration.
 - [x] Generate share tokens cryptographically at random and keep them separate from filenames; never log tokens or include them in errors.
 - [x] Allow an unauthenticated share request to access only its specific media item; never reveal the gallery, other files, or unrelated metadata.
 - [x] Redirect unknown, revoked, or expired share links to the Rickroll YouTube video. Apply this only to share-link requests, not sign-in, gallery, or ordinary media errors.

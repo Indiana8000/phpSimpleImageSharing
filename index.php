@@ -308,36 +308,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failureCount = count($uploadResults) - $successCount;
             if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'photo uploaded.' : 'photos uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
-        } elseif ($action === 'create_share') {
+        } elseif ($action === 'create_share' || $action === 'revoke_share') {
             $mediaId = (string)($_POST['id'] ?? '');
             if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) throw new InvalidArgumentException('Invalid media ID.');
             $findMedia = $pdo->prepare('SELECT id, owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
             $findMedia->execute([':id' => $mediaId]);
             $sharedMedia = $findMedia->fetch(PDO::FETCH_ASSOC);
             if (!is_array($sharedMedia) || ($currentUser['role'] !== 'admin' && $sharedMedia['owner_id'] !== $currentUser['id'])) {
-                throw new RuntimeException('You cannot create a share link for this photo.');
+                throw new RuntimeException('You cannot change the share link for this photo.');
             }
-            $tokenValue = generateShareToken();
-            $now = time();
-            $pdo->beginTransaction();
-            try {
+            if ($action === 'revoke_share') {
                 $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
-                $revoke->execute([':revoked_at' => $now, ':media_id' => $mediaId]);
-                $insert = $pdo->prepare(
-                    'INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at)
-                     VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)'
-                );
-                $insert->execute([
-                    ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId,
-                    ':token_hash' => hash('sha256', $tokenValue), ':token' => $tokenValue, ':created_at' => $now,
-                    ':expires_at' => $sharedMedia['expires_at'],
-                ]);
-                $pdo->commit();
-            } catch (Throwable $exception) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                throw $exception;
+                $revoke->execute([':revoked_at' => time(), ':media_id' => $mediaId]);
+                $_SESSION['flash_notice'] = 'Sharing stopped. The link no longer works.';
+            } else {
+                $tokenValue = generateShareToken();
+                $now = time();
+                $pdo->beginTransaction();
+                try {
+                    $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
+                    $revoke->execute([':revoked_at' => $now, ':media_id' => $mediaId]);
+                    $insert = $pdo->prepare(
+                        'INSERT INTO share_links (id, media_id, token_hash, token, created_at, expires_at, revoked_at)
+                         VALUES (:id, :media_id, :token_hash, :token, :created_at, :expires_at, NULL)'
+                    );
+                    $insert->execute([
+                        ':id' => bin2hex(random_bytes(16)), ':media_id' => $mediaId,
+                        ':token_hash' => hash('sha256', $tokenValue), ':token' => $tokenValue, ':created_at' => $now,
+                        ':expires_at' => $sharedMedia['expires_at'],
+                    ]);
+                    $pdo->commit();
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    throw $exception;
+                }
+                $_SESSION['flash_notice'] = 'New share link created. The old link no longer works.';
             }
-            $_SESSION['flash_notice'] = 'New share link created. The old link no longer works.';
             $returnQuery = [
                 'action' => 'detail',
                 'id' => $mediaId,
@@ -377,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (InvalidArgumentException | RuntimeException $exception) {
         $error = $exception->getMessage();
-        if ($action === 'create_share' && is_string($_POST['id'] ?? null)) { $action = 'detail'; $_GET['id'] = $_POST['id']; }
+        if (in_array($action, ['create_share', 'revoke_share'], true) && is_string($_POST['id'] ?? null)) { $action = 'detail'; $_GET['id'] = $_POST['id']; }
         if (in_array($action, ['create_user', 'reset_user_password', 'set_user_active'], true)) $action = 'users';
     } catch (Throwable $exception) {
         error_log('phpSimpleImageSharing request error: ' . $exception->getMessage());
@@ -543,7 +549,8 @@ if ($action === 'detail') {
         $shareStatement->execute([':id' => (string)$detail['id'], ':now' => time()]);
         $shareRow = $shareStatement->fetch(PDO::FETCH_ASSOC);
         $hasShare = is_array($shareRow);
-        if ($hasShare) $shownShare = sharePath((string)$shareRow['token']);
+        // Links created before tokens were stored have an empty token and cannot be shown again.
+        if ($hasShare && (string)$shareRow['token'] !== '') $shownShare = sharePath((string)$shareRow['token']);
     }
     pageStart((string)$detail['original_name'], 'viewer');
     ?>
@@ -574,12 +581,17 @@ if ($action === 'detail') {
         <div class="link"><input id="shareUrl" class="share-url" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
       </div>
 <?php endif; ?>
+<?php $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; ?>
       <form method="post" action="?action=create_share">
-        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
-        <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
-        <input type="hidden" name="return_q" value="<?= h($searchTerm) ?>"><input type="hidden" name="return_sort" value="<?= h($sortOrder) ?>"><input type="hidden" name="return_filter" value="<?= h($filter) ?>"><input type="hidden" name="return_page" value="<?= (int)$galleryPage ?>">
+        <?= $shareFields ?>
         <button class="btn<?= $shownShare === '' ? ' primary' : '' ?>"><?= icon('link') ?><?= $hasShare ? 'Create new share link' : 'Create share link' ?></button>
       </form>
+<?php if ($hasShare): ?>
+      <form method="post" action="?action=revoke_share" style="margin-top:8px" data-confirm="Stop sharing this photo?" data-confirm-text="The current share link stops working. You can create a new one later." data-confirm-label="Stop sharing">
+        <?= $shareFields ?>
+        <button class="btn danger"><?= icon('close') ?>Stop sharing</button>
+      </form>
+<?php endif; ?>
       <p class="hint" style="margin-top:8px">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
 <?php endif; ?>
       <a class="btn" href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>"><?= icon('download') ?>Download original</a>
@@ -995,7 +1007,7 @@ function pageEnd(): void {
     control.addEventListener('submit',async event=>{
       if(control.dataset.ok){delete control.dataset.ok;return}
       event.preventDefault();
-      if(await ask(control.dataset.confirm,'This removes the photo and its share link for everyone. It cannot be undone.','Delete')){control.dataset.ok='1';control.requestSubmit()}
+      if(await ask(control.dataset.confirm,control.dataset.confirmText||'This removes the photo and its share link for everyone. It cannot be undone.',control.dataset.confirmLabel||'Delete')){control.dataset.ok='1';control.requestSubmit()}
     });
   });
 

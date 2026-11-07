@@ -28,7 +28,7 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Individual administrator and member accounts; public self-registration is disabled.
 - All signed-in users can view the group gallery. Members can delete their own uploads; administrators can delete any upload and manage accounts.
 - Drag-and-drop and multi-image upload with per-file progress and retry for failures.
-- Create a public, unguessable share link for one photo from its detail view. Creating another link revokes the previous one; links expire when the photo expires.
+- Create a public, unguessable share link for one photo from its detail view. The owner or an administrator can copy the current link again, create a new one (which revokes the previous link), or stop sharing without creating a new link. Links expire when the photo expires.
 - Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
 - Choose whether each upload is kept forever or deleted after 1, 7, or 30 days. Expired files are removed in small batches during signed-in requests; no cron job is required.
 - Search filenames, sort by upload date, filter by everyone, your own photos, or photos expiring soon, and browse a paginated gallery. Each photo shows how long it will be kept. The detail view has previous/next navigation (also with the arrow keys), private-link copying, and original download.

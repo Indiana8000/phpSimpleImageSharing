@@ -67,17 +67,11 @@ final class Database
             }
             if ($version === 0) {
                 self::createInitialSchema($pdo);
-                $version = 2;
-                $pdo->exec('PRAGMA user_version = 2');
-            }
-            if ($version === 1) {
-                $pdo->exec('ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0');
-                $version = 2;
-                $pdo->exec('PRAGMA user_version = 2');
-            }
-            if ($version === 2) {
                 self::createLoginAttemptsTable($pdo);
-                $pdo->exec('PRAGMA user_version = 3');
+                $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+            } elseif ($version !== self::SCHEMA_VERSION) {
+                // No released version used an older layout, so there is nothing to migrate.
+                throw new RuntimeException('Unsupported development database; delete it to start fresh.');
             }
             $pdo->exec('COMMIT');
         } catch (Throwable $exception) {

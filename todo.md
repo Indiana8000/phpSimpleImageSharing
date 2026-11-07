@@ -85,7 +85,7 @@ data_dir/
 - [x] Allow generating a new link for a media item. The new link immediately replaces the old one (token rotation).
 - [x] Use short share URLs with a 26-character token path; store a token hash in SQLite for lookup and compare it safely on access. The token itself is kept so the owner can copy the current link again (accepted trade-off: anyone who can read the database can already read the media files next to it).
 - [x] Show a link badge on gallery photos that have an active share link (owner/admin only) and offer a hover button that copies the existing link or creates one if missing.
-- [x] Use explicit Apache `mod_rewrite` rules to route token paths and legacy `/s/<token>` paths to `index.php`. PHP checks share status, expiration, and media permissions before serving anything.
+- [x] Use explicit Apache `mod_rewrite` rules to route token paths to `index.php`. PHP checks share status, expiration, and media permissions before serving anything.
 - [ ] If media routes include extensions, match only explicitly allowed image/video extensions and compare them with the media type in SQLite; never use a URL parameter as a file path.
 - [x] Let the owner revoke a link without creating a new one ("Stop sharing" on the photo page).
 - [ ] Optionally set an expiration date for a share link, separate from the photo's own expiration.

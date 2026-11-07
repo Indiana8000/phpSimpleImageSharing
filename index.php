@@ -121,7 +121,6 @@ if ($action === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     session_regenerate_id(true);
     header('Location: ./'); exit;
 }
-if (array_key_exists('invalid_share', $_GET)) redirectToRickroll();
 if (array_key_exists('share', $_GET)) {
     $shareValue = $_GET['share'];
     servePublicShare($pdo, $mediaStorage, is_string($shareValue) ? $shareValue : '');

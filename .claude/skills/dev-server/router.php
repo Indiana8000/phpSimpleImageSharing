@@ -9,11 +9,7 @@ if (preg_match('#^/config\.php$#i', $path) || preg_match('#^/(app|\.claude|\.git
     http_response_code(403);
     exit('Forbidden');
 }
-if (preg_match("#^/s/($token)/?$#i", $path, $m)) {
-    $_GET['share'] = $m[1];
-} elseif (preg_match('#^/s/#i', $path)) {
-    $_GET['invalid_share'] = '1';
-} elseif (preg_match("#^/($token)/?$#i", $path, $m) && !is_file($root . $path) && !is_dir($root . $path)) {
+if (preg_match("#^/($token)/?$#i", $path, $m) && !is_file($root . $path) && !is_dir($root . $path)) {
     $_GET['share'] = $m[1];
 } elseif ($path !== '/' && $path !== '/index.php' && is_file($root . $path)) {
     return false; // serve other static files as-is

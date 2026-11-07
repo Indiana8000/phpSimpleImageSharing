@@ -5,8 +5,6 @@ Options -Indexes
 </Files>
 
 RewriteEngine On
-RewriteRule ^s/([0-9A-HJKMNP-TV-Z]{26})/?$ index.php?share=$1 [END,QSA,NC]
-RewriteRule ^s/.*$ index.php?invalid_share=1 [END,QSA,NC]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([0-9A-HJKMNP-TV-Z]{26})/?$ index.php?share=$1 [END,QSA,NC]

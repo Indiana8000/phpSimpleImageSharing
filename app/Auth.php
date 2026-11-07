@@ -17,7 +17,7 @@ final class Auth
     }
 
     /**
-     * Create the first administrator from the legacy configured password hash.
+     * Create the first administrator from the password hash in config.php.
      * This is safe to call on every request: it inserts only while the users
      * table is empty, so later config changes never reset an existing account.
      *
@@ -25,17 +25,17 @@ final class Auth
      */
     public static function bootstrapInitialAdmin(
         PDO $pdo,
-        string $legacyPasswordHash,
+        string $initialPasswordHash,
         string $username = 'admin',
         string $displayName = 'Administrator'
     ): bool {
-        // Once any account exists, the legacy config hash is no longer needed.
+        // Once any account exists, the configured hash is no longer needed.
         // Do not let a removed or changed bootstrap setting affect sign-in.
         if ($pdo->query('SELECT 1 FROM users LIMIT 1')->fetchColumn() !== false) {
             return false;
         }
 
-        if (!self::isPasswordHash($legacyPasswordHash)) {
+        if (!self::isPasswordHash($initialPasswordHash)) {
             throw new InvalidArgumentException('The initial administrator password hash is missing or invalid.');
         }
 
@@ -56,7 +56,7 @@ final class Auth
             ':id' => $id,
             ':username' => $username,
             ':display_name' => $displayName,
-            ':password_hash' => $legacyPasswordHash,
+            ':password_hash' => $initialPasswordHash,
             ':created_at' => $now,
         ]);
 

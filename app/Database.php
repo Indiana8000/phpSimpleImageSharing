@@ -10,7 +10,7 @@ declare(strict_types=1);
 final class Database
 {
     private const DATABASE_FILE = 'phpSimpleImageSharing.sqlite';
-    private const SCHEMA_VERSION = 3;
+    private const SCHEMA_VERSION = 1;
     private const BUSY_TIMEOUT_MS = 5000;
 
     /**

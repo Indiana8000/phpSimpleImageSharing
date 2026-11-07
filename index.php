@@ -265,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } elseif ($action === 'upload') {
             $retentionDays = (string)($_POST['retention'] ?? 'never');
-            if (!in_array($retentionDays, ['never', '1', '7', '30'], true)) {
+            if (!array_key_exists($retentionDays, retentionOptions())) {
                 throw new InvalidArgumentException('Choose a valid retention period.');
             }
             $expiresAt = $retentionDays === 'never' ? null : time() + ((int)$retentionDays * 86400);
@@ -308,19 +308,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $failureCount = count($uploadResults) - $successCount;
             if ($successCount > 0) $notice = $successCount . ' ' . ($successCount === 1 ? 'photo uploaded.' : 'photos uploaded.');
             if ($failureCount > 0) $error = $failureCount . ' ' . ($failureCount === 1 ? 'file could not be uploaded.' : 'files could not be uploaded. Check their format and size.');
-        } elseif ($action === 'create_share' || $action === 'revoke_share') {
+        } elseif ($action === 'create_share' || $action === 'revoke_share' || $action === 'set_retention') {
             $mediaId = (string)($_POST['id'] ?? '');
             if (!preg_match('/\A[a-f0-9]{32,64}\z/', $mediaId)) throw new InvalidArgumentException('Invalid media ID.');
             $findMedia = $pdo->prepare('SELECT id, owner_id, expires_at FROM media WHERE id = :id LIMIT 1');
             $findMedia->execute([':id' => $mediaId]);
             $sharedMedia = $findMedia->fetch(PDO::FETCH_ASSOC);
             if (!is_array($sharedMedia) || ($currentUser['role'] !== 'admin' && $sharedMedia['owner_id'] !== $currentUser['id'])) {
-                throw new RuntimeException('You cannot change the share link for this photo.');
+                throw new RuntimeException('You cannot change this photo.');
             }
             if ($action === 'revoke_share') {
                 $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
                 $revoke->execute([':revoked_at' => time(), ':media_id' => $mediaId]);
                 $_SESSION['flash_notice'] = 'Sharing stopped. The link no longer works.';
+            } elseif ($action === 'set_retention') {
+                $retentionDays = (string)($_POST['retention'] ?? '');
+                if (!array_key_exists($retentionDays, retentionOptions())) throw new InvalidArgumentException('Choose a valid retention period.');
+                $newExpiry = $retentionDays === 'never' ? null : time() + ((int)$retentionDays * 86400);
+                $pdo->beginTransaction();
+                try {
+                    // The active share link always expires together with the photo.
+                    $pdo->prepare('UPDATE media SET expires_at = :expires_at WHERE id = :id')->execute([':expires_at' => $newExpiry, ':id' => $mediaId]);
+                    $pdo->prepare('UPDATE share_links SET expires_at = :expires_at WHERE media_id = :id AND revoked_at IS NULL')->execute([':expires_at' => $newExpiry, ':id' => $mediaId]);
+                    $pdo->commit();
+                } catch (Throwable $exception) {
+                    if ($pdo->inTransaction()) $pdo->rollBack();
+                    throw $exception;
+                }
+                $_SESSION['flash_notice'] = $newExpiry === null ? 'This photo is now kept until someone deletes it.' : 'This photo will be deleted on ' . date('Y-m-d', $newExpiry) . '.';
             } else {
                 $tokenValue = generateShareToken();
                 $now = time();
@@ -383,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (InvalidArgumentException | RuntimeException $exception) {
         $error = $exception->getMessage();
-        if (in_array($action, ['create_share', 'revoke_share'], true) && is_string($_POST['id'] ?? null)) { $action = 'detail'; $_GET['id'] = $_POST['id']; }
+        if (in_array($action, ['create_share', 'revoke_share', 'set_retention'], true) && is_string($_POST['id'] ?? null)) { $action = 'detail'; $_GET['id'] = $_POST['id']; }
         if (in_array($action, ['create_user', 'reset_user_password', 'set_user_active'], true)) $action = 'users';
     } catch (Throwable $exception) {
         error_log('phpSimpleImageSharing request error: ' . $exception->getMessage());
@@ -568,6 +583,7 @@ if ($action === 'detail') {
     <aside class="panel">
       <?php if ($error): ?><p class="banner error" role="alert"><?= h($error) ?></p><?php endif; ?>
       <?php if ($notice): ?><p class="banner" role="status"><?= h($notice) ?></p><?php endif; ?>
+<?php if ($canManage) { $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; } ?>
       <dl>
         <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
         <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
@@ -575,13 +591,28 @@ if ($action === 'detail') {
         <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
       </dl>
 <?php if ($canManage): ?>
+      <details class="retention">
+        <summary class="btn sm">Change how long it is kept</summary>
+        <form class="retention-form" method="post" action="?action=set_retention">
+          <?= $shareFields ?>
+          <label class="sr" for="retentionSelect">Keep this photo</label>
+          <select class="field" id="retentionSelect" name="retention">
+<?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
+            <option value="<?= h((string)$retentionValue) ?>"><?= h($retentionLabel) ?></option>
+<?php endforeach; ?>
+          </select>
+          <button class="btn primary sm">Save</button>
+        </form>
+        <p class="hint">Counts from today. The photo and its share link are deleted at the end. Choose Forever to turn automatic deletion off.</p>
+      </details>
+<?php endif; ?>
+<?php if ($canManage): ?>
 <?php if ($shownShare !== ''): ?>
       <div class="share-result">
         <label for="shareUrl">Share link</label>
         <div class="link"><input id="shareUrl" class="share-url" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
       </div>
 <?php endif; ?>
-<?php $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; ?>
       <form method="post" action="?action=create_share">
         <?= $shareFields ?>
         <button class="btn<?= $shownShare === '' ? ' primary' : '' ?>"><?= icon('link') ?><?= $hasShare ? 'Create new share link' : 'Create share link' ?></button>
@@ -679,11 +710,10 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     <div class="queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div>
     <fieldset class="keep">
       <legend>Keep these photos</legend>
-      <div class="seg">
-        <label><input type="radio" name="retention" value="never" checked><span>Forever</span></label>
-        <label><input type="radio" name="retention" value="1"><span>1 day</span></label>
-        <label><input type="radio" name="retention" value="7"><span>7 days</span></label>
-        <label><input type="radio" name="retention" value="30"><span>30 days</span></label>
+      <div class="seg wrap">
+<?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
+        <label><input type="radio" name="retention" value="<?= h((string)$retentionValue) ?>"<?= (string)$retentionValue === 'never' ? ' checked' : '' ?>><span><?= h($retentionLabel) ?></span></label>
+<?php endforeach; ?>
       </div>
       <p class="hint" id="retentionHint"></p>
     </fieldset>
@@ -757,6 +787,11 @@ function cleanQuery(array $params): string {
     return http_build_query($params);
 }
 
+/** Retention choices in days (keys) with their labels. Months are counted as 30 days. */
+function retentionOptions(): array {
+    return ['never' => 'Forever', '1' => '1 day', '7' => '7 days', '30' => '30 days', '60' => '2 months', '90' => '3 months', '180' => '6 months'];
+}
+
 function pageStart(string $title, string $variant = 'app'): void {
     $user = isset($GLOBALS['currentUser']) && is_array($GLOBALS['currentUser']) ? $GLOBALS['currentUser'] : null;
     echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>' . h($title) . ' · phpSimpleImageSharing</title>';
@@ -818,7 +853,7 @@ h2{margin:0}
 .seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--quiet);position:relative}
 .seg button,.seg label{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted);position:relative;cursor:pointer}
 .seg button[aria-pressed=true],.seg input:checked+span{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
-.seg label{padding:0}.seg label span{display:block;padding:6px 14px;border-radius:999px}
+.seg.wrap{flex-wrap:wrap;border-radius:18px}.seg label{padding:0}.seg label span{display:block;padding:6px 14px;border-radius:999px}
 .seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
 .seg label:focus-within span{outline:2px solid var(--accent);outline-offset:2px}
 .search{position:relative;flex:1;min-width:150px;max-width:340px}
@@ -947,6 +982,10 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .share-result input{flex:1;min-width:0;height:38px;border-radius:9px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px}
 .share-result .btn{width:auto;margin:0}
 .panel form{margin:0}
+.panel .field{height:38px;border-radius:10px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px;flex:1;min-width:0}
+.retention{margin:0 0 18px}.retention summary{display:flex;cursor:pointer}
+.retention-form{display:flex;gap:8px;margin-top:2px}.retention-form .btn{width:auto;margin:0}
+.retention .hint{margin:8px 0 0}
 
 @media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,1fr);gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}

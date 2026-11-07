@@ -30,7 +30,7 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 - Drag-and-drop and multi-image upload with per-file progress and retry for failures.
 - Create a public, unguessable share link for one photo from its detail view. The owner or an administrator can copy the current link again, create a new one (which revokes the previous link), or stop sharing without creating a new link. Links expire when the photo expires.
 - Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
-- Choose whether each upload is kept forever or deleted after 1, 7, or 30 days. Expired files are removed in small batches during signed-in requests; no cron job is required.
+- Choose whether each upload is kept forever or deleted after 1 day, 7 days, 30 days, or 2, 3, or 6 months (months count as 30 days). The owner or an administrator can change this at any time from the photo page, or switch automatic deletion off with Forever; the countdown restarts from the day of the change and an active share link follows the new date. Expired files are removed in small batches during signed-in requests; no cron job is required.
 - Search filenames, sort by upload date, filter by everyone, your own photos, or photos expiring soon, and browse a paginated gallery. Each photo shows how long it will be kept. The detail view has previous/next navigation (also with the arrow keys), private-link copying, and original download.
 - Select several photos to copy their private links or delete them in one action; deletion permissions are checked per photo.
 - Administrators can check PHP extensions, HTTPS detection, configured upload limits, and stored media usage under **Manage users**.

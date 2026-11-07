@@ -618,60 +618,63 @@ if ($action === 'detail') {
     <aside class="panel">
       <?php if ($error || $notice): ?><p class="banner<?= $error ? ' error' : '' ?> js-hide" role="<?= $error ? 'alert' : 'status' ?>" data-toast="<?= h((string)($error ?: $notice)) ?>" data-toast-ms="<?= $error ? 5000 : 2400 ?>"><?= h((string)($error ?: $notice)) ?></p><?php endif; ?>
 <?php if ($canManage) { $shareFields = '<input type="hidden" name="csrf" value="' . h(csrf()) . '"><input type="hidden" name="id" value="' . h((string)$detail['id']) . '"><input type="hidden" name="return_q" value="' . h($searchTerm) . '"><input type="hidden" name="return_sort" value="' . h($sortOrder) . '"><input type="hidden" name="return_filter" value="' . h($filter) . '"><input type="hidden" name="return_page" value="' . (int)$galleryPage . '">'; } ?>
-      <dl>
-        <dt>File name</dt><dd class="fname"><?= h((string)$detail['original_name']) ?></dd>
-        <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
-        <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
-        <dt>Size</dt><dd><?= h(formatBytes((int)$detail['size_bytes'])) ?></dd>
-        <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
-      </dl>
+      <section class="pcard">
+        <dl>
+          <dt>File name</dt><dd class="fname"><?= h((string)$detail['original_name']) ?></dd>
+          <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
+          <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
+          <dt>Size</dt><dd><?= h(formatBytes((int)$detail['size_bytes'])) ?></dd>
+          <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
+        </dl>
 <?php if ($canManage): ?>
-      <form class="share-result" method="post" action="?action=set_retention">
-        <?= $shareFields ?>
-        <label for="retentionSelect">Keep this photo</label>
-        <div class="link">
-          <select class="field" id="retentionSelect" name="retention">
-            <option value="keep" selected>Keep as is (<?= $detailExpiry === null ? 'forever' : h($detailExpiry['date']) ?>)</option>
+        <form class="keep-form" method="post" action="?action=set_retention">
+          <?= $shareFields ?>
+          <label for="retentionSelect">Keep this photo</label>
+          <div class="link">
+            <select class="field" id="retentionSelect" name="retention">
+              <option value="keep" selected>Keep as is (<?= $detailExpiry === null ? 'forever' : h($detailExpiry['date']) ?>)</option>
 <?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
-            <option value="<?= h((string)$retentionValue) ?>"><?= h($retentionLabel) ?></option>
+              <option value="<?= h((string)$retentionValue) ?>"><?= h($retentionLabel) ?></option>
 <?php endforeach; ?>
-          </select>
-          <button class="btn primary sm">Save</button>
-        </div>
-        <p class="hint">Counts from today. The photo and its share link are deleted at the end. Choose Forever to turn automatic deletion off.</p>
-      </form>
+            </select>
+            <button class="btn primary sm">Save</button>
+          </div>
+          <p class="hint">Counts from today. The photo and its share link are deleted at the end. Choose Forever to turn automatic deletion off.</p>
+        </form>
 <?php endif; ?>
+      </section>
 <?php if ($canManage): ?>
+      <section class="pcard">
+        <h2>Share link</h2>
 <?php if ($shownShare !== ''): ?>
-      <div class="share-result">
-        <label for="shareUrl">Share link</label>
-        <div class="link"><input id="shareUrl" class="share-url" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
+        <div class="link"><input id="shareUrl" class="share-url" aria-label="Share link" readonly value="<?= h($shownShare) ?>" data-path="<?= h($shownShare) ?>"><button type="button" class="btn primary sm" data-copy-link="<?= h($shownShare) ?>">Copy</button></div>
         <p class="hint">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
-      </div>
 <?php endif; ?>
-      <form method="post" action="?action=create_share">
-        <?= $shareFields ?>
-        <button class="btn<?= $shownShare === '' ? ' primary' : '' ?>"><?= icon('link') ?><?= $hasShare ? 'Create new share link' : 'Create share link' ?></button>
-      </form>
+        <div class="stack">
+          <form method="post" action="?action=create_share">
+            <?= $shareFields ?>
+            <button class="btn<?= $shownShare === '' ? ' primary' : '' ?>"><?= icon('link') ?><?= $hasShare ? 'Create new share link' : 'Create share link' ?></button>
+          </form>
 <?php if ($hasShare): ?>
-      <form method="post" action="?action=revoke_share" style="margin-top:8px" data-confirm="Stop sharing this photo?" data-confirm-text="The current share link stops working. You can create a new one later." data-confirm-label="Stop sharing">
-        <?= $shareFields ?>
-        <button class="btn danger"><?= icon('close') ?>Stop sharing</button>
-      </form>
+          <form method="post" action="?action=revoke_share" data-confirm="Stop sharing this photo?" data-confirm-text="The current share link stops working. You can create a new one later." data-confirm-label="Stop sharing">
+            <?= $shareFields ?>
+            <button class="btn danger"><?= icon('close') ?>Stop sharing</button>
+          </form>
 <?php endif; ?>
-<?php if ($shownShare === ''): ?>
-      <p class="hint" style="margin-top:8px">Anyone with the link can see this photo until it is deleted. A new link stops the old one from working.</p>
+        </div>
+      </section>
 <?php endif; ?>
-<?php endif; ?>
-      <a class="btn" href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>"><?= icon('download') ?>Download original</a>
-      <button type="button" class="btn" data-copy-link="<?= h($detailImageUrl) ?>"><?= icon('copy') ?>Copy link for signed-in friends</button>
+      <div class="stack">
+        <a class="btn" href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>"><?= icon('download') ?>Download original</a>
+        <button type="button" class="btn" data-copy-link="<?= h($detailImageUrl) ?>"><?= icon('copy') ?>Copy link for signed-in friends</button>
 <?php if ($canManage): ?>
-      <form method="post" action="?action=delete" data-confirm="<?= h('Delete ' . (string)$detail['original_name'] . '?') ?>">
-        <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
-        <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
-        <button class="btn danger"><?= icon('trash') ?>Delete photo</button>
-      </form>
+        <form method="post" action="?action=delete" data-confirm="<?= h('Delete ' . (string)$detail['original_name'] . '?') ?>">
+          <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
+          <input type="hidden" name="id" value="<?= h((string)$detail['id']) ?>">
+          <button class="btn danger"><?= icon('trash') ?>Delete photo</button>
+        </form>
 <?php endif; ?>
+      </div>
     </aside>
   </div>
 </div>
@@ -1025,7 +1028,7 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .viewer-page :focus-visible{outline-color:#8590ff}
 .viewer-page .toast{background:#eceef3;color:#0c0e12;box-shadow:0 6px 20px rgba(0,0,0,.45)}
 .vwrap{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
-.vtop{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.vtop{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;padding:10px 12px;background:#0c0e12}
 .vtop .icon-btn{color:#fff}.vtop .icon-btn:hover{background:rgba(255,255,255,.12)}
 .vtop .t{flex:1;min-width:0}.vtop .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtop .t span{font-size:13px;color:#98a0b0}
 .vbody{display:grid;grid-template-columns:1fr;min-height:0}
@@ -1034,24 +1037,24 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .stage img{max-width:100%;max-height:calc(100vh - 90px);border-radius:12px;display:block;object-fit:contain}
 .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;text-decoration:none}
 .nav:hover{background:rgba(255,255,255,.26)}.nav.l{left:22px}.nav.r{right:22px}
-.panel{padding:6px 18px 32px}
-.panel dl{margin:0 0 18px;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.panel{padding:6px 18px 32px;display:flex;flex-direction:column;gap:14px}
+.panel dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
 .panel dt{color:#98a0b0}.panel dd{margin:0;min-width:0}.panel dd.fname{overflow-wrap:anywhere}
-.panel .btn{background:#1d2129;border-color:#2a2f39;color:#eceef3;width:100%;margin-bottom:8px}
+.panel .btn{background:#1d2129;border-color:#2a2f39;color:#eceef3;width:100%;margin:0}
 .panel .btn:hover{background:#262b36}
 .panel .btn.primary{background:#8590ff;border-color:#8590ff;color:#0d1030}
 .panel .btn.danger{color:#ff7a70}
-.panel .banner{background:#1d2129;color:#eceef3}.panel .banner.error{color:#ff7a70}
-.panel .hint{color:#98a0b0;margin:0 0 16px}
-.share-result{margin:0 0 14px;padding:12px;border-radius:14px;background:#1d2129;border:1px solid #2a2f39}
-.share-result label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
-.share-result .link{display:flex;gap:8px}
-.share-result input{flex:1;min-width:0;height:38px;border-radius:9px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px}
-.share-result .btn{width:auto;margin:0}
-.share-result .hint{margin:8px 0 0}
-.panel form.share-result{margin:0 0 14px}
+.panel .banner{background:#1d2129;color:#eceef3;margin:0}.panel .banner.error{color:#ff7a70}
+.panel .hint{color:#98a0b0;margin:0}
 .panel form{margin:0}
-.panel .field{height:38px;border-radius:10px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px;flex:1;min-width:0}
+.stack{display:grid;gap:8px}
+.pcard{display:grid;gap:12px;padding:14px;border-radius:14px;background:#1d2129;border:1px solid #2a2f39}
+.pcard h2,.pcard label{display:block;margin:0 0 -4px;font-weight:600;font-size:14px}
+.pcard .btn{background:#262b36}.pcard .btn.primary{background:#8590ff}.pcard .btn:hover{background:#2f3541}.pcard .btn.primary:hover{background:#9aa3ff}
+.pcard .keep-form{display:grid;gap:8px;padding-top:12px;border-top:1px solid #2a2f39}
+.pcard .link{display:flex;gap:8px}
+.pcard .link .btn{width:auto}
+.pcard input,.panel .field{height:38px;border-radius:9px;border:1px solid #2a2f39;background:#0f1115;color:#eceef3;padding:0 10px;flex:1;min-width:0}
 
 @media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,1fr);gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}

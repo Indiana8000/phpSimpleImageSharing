@@ -321,6 +321,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $revoke = $pdo->prepare('UPDATE share_links SET revoked_at = :revoked_at WHERE media_id = :media_id AND revoked_at IS NULL');
                 $revoke->execute([':revoked_at' => time(), ':media_id' => $mediaId]);
                 $_SESSION['flash_notice'] = 'Sharing stopped. The link no longer works.';
+            } elseif ($action === 'set_retention' && ($_POST['retention'] ?? '') === 'keep') {
+                $_SESSION['flash_notice'] = 'Nothing changed.';
             } elseif ($action === 'set_retention') {
                 $retentionDays = (string)($_POST['retention'] ?? '');
                 if (!array_key_exists($retentionDays, retentionOptions())) throw new InvalidArgumentException('Choose a valid retention period.');
@@ -597,6 +599,7 @@ if ($action === 'detail') {
           <?= $shareFields ?>
           <label class="sr" for="retentionSelect">Keep this photo</label>
           <select class="field" id="retentionSelect" name="retention">
+            <option value="keep" selected>Keep as is (<?= $detailExpiry === null ? 'forever' : h($detailExpiry['date']) ?>)</option>
 <?php foreach (retentionOptions() as $retentionValue => $retentionLabel): ?>
             <option value="<?= h((string)$retentionValue) ?>"><?= h($retentionLabel) ?></option>
 <?php endforeach; ?>

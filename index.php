@@ -607,7 +607,8 @@ if ($action === 'detail') {
 <div class="vwrap">
   <div class="vtop">
     <a class="icon-btn" href="<?= h($backUrl) ?>" aria-label="Back to photos"><?= icon('back') ?></a>
-    <div class="t"><b><?= h((string)$detail['original_name']) ?></b><span><?= $detailIndex + 1 ?> of <?= count($allGalleryImages) ?></span></div>
+    <div class="t"><b><?= h((string)$detail['original_name']) ?></b></div>
+    <span class="cnt"><?= $detailIndex + 1 ?> of <?= count($allGalleryImages) ?></span>
   </div>
   <div class="vbody">
     <div class="stage">
@@ -1029,9 +1030,9 @@ body.viewer-page{background:#0c0e12;color:#eceef3}
 .viewer-page :focus-visible{outline-color:#8590ff}
 .viewer-page .toast{background:#eceef3;color:#0c0e12;box-shadow:0 6px 20px rgba(0,0,0,.45)}
 .vwrap{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
-.vtop{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;padding:10px 12px;background:#0c0e12}
-.vtop .icon-btn{color:#fff}.vtop .icon-btn:hover{background:rgba(255,255,255,.12)}
-.vtop .t{flex:1;min-width:0}.vtop .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtop .t span{font-size:13px;color:#98a0b0}
+.vtop{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;height:56px;padding:0 16px;background:color-mix(in srgb,#0c0e12 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid #2a2f39}
+.vtop .icon-btn{color:#fff;margin-left:-8px}.vtop .icon-btn:hover{background:rgba(255,255,255,.12)}
+.vtop .t{flex:1;min-width:0}.vtop .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtop .cnt{font-size:13px;color:#98a0b0;white-space:nowrap}
 .vbody{display:grid;grid-template-columns:1fr;min-height:0}
 @media(min-width:900px){.vbody{grid-template-columns:1fr 340px}}
 .stage{position:relative;display:grid;place-items:center;min-height:0;padding:0 12px 12px}

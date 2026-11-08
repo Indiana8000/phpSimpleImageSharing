@@ -25,8 +25,8 @@ On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in 
 
 ## Current features and limits
 
-- Individual administrator and member accounts; public self-registration is disabled.
-- All signed-in users can view the group gallery. Members can delete their own uploads; administrators can delete any upload and manage accounts.
+- Individual administrator, member and guest accounts; public self-registration is disabled.
+- Visibility depends on the role: administrators see all photos; members see all photos except those of guests; guests see only their own photos. Members and guests can delete their own uploads; administrators can delete any upload and manage accounts. Share links work for anyone who has the link, whatever the role of the owner.
 - Drag-and-drop and multi-image upload with per-file progress and retry for failures.
 - Create a public, unguessable share link for one photo from its detail view. The owner or an administrator can copy the current link again, create a new one (which revokes the previous link), or stop sharing without creating a new link. Links expire when the photo expires.
 - In the gallery, photos with an active share link show a small link badge (visible only to the owner and administrators). Hovering a photo you may manage shows a button that copies its share link; if none exists yet, one is created first. Selecting photos adds a "Share links" action that copies all their links and creates the missing ones.

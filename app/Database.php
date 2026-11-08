@@ -90,7 +90,7 @@ final class Database
                 username TEXT NOT NULL COLLATE NOCASE UNIQUE,
                 display_name TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
-                role TEXT NOT NULL CHECK (role IN ('admin', 'member')),
+                role TEXT NOT NULL CHECK (role IN ('admin', 'member', 'guest')),
                 active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
                 auth_version INTEGER NOT NULL DEFAULT 0,
                 default_retention TEXT NOT NULL DEFAULT 'never',

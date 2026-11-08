@@ -183,10 +183,10 @@ if ($action === 'image') {
     $rawId = $_GET['id'] ?? '';
     $id = is_string($rawId) ? $rawId : '';
     if (!preg_match('/\A[a-f0-9]{32,64}\z/', $id)) { http_response_code(404); exit; }
-    $statement = $pdo->prepare('SELECT owner_id, storage_name, mime, expires_at FROM media WHERE id = :id LIMIT 1');
+    $statement = $pdo->prepare('SELECT media.owner_id, media.storage_name, media.mime, media.expires_at, users.role AS owner_role FROM media JOIN users ON users.id = media.owner_id WHERE media.id = :id LIMIT 1');
     $statement->execute([':id' => $id]);
     $media = $statement->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($media)) { http_response_code(404); exit; }
+    if (!is_array($media) || !mayViewMedia($currentUser, (string)$media['owner_id'], (string)$media['owner_role'])) { http_response_code(404); exit; }
     if ($media['expires_at'] !== null && (int)$media['expires_at'] <= time()) { http_response_code(410); exit('This image has expired.'); }
     $file = $mediaStorage->locate((string)$media['owner_id'], (string)$media['storage_name']);
     if ($file === null || !in_array($media['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) { http_response_code(404); exit; }
@@ -202,10 +202,11 @@ if ($action === 'download') {
     $rawId = $_GET['id'] ?? '';
     $id = is_string($rawId) ? $rawId : '';
     if (!preg_match('/\A[a-f0-9]{32,64}\z/', $id)) { http_response_code(404); exit; }
-    $statement = $pdo->prepare('SELECT owner_id, storage_name, original_name, mime, expires_at FROM media WHERE id = :id LIMIT 1');
+    $statement = $pdo->prepare('SELECT media.owner_id, media.storage_name, media.original_name, media.mime, media.expires_at, users.role AS owner_role FROM media JOIN users ON users.id = media.owner_id WHERE media.id = :id LIMIT 1');
     $statement->execute([':id' => $id]);
     $media = $statement->fetch(PDO::FETCH_ASSOC);
-    if (!is_array($media) || ($media['expires_at'] !== null && (int)$media['expires_at'] <= time())) { http_response_code(404); exit; }
+    if (!is_array($media) || !mayViewMedia($currentUser, (string)$media['owner_id'], (string)$media['owner_role'])
+        || ($media['expires_at'] !== null && (int)$media['expires_at'] <= time())) { http_response_code(404); exit; }
     $file = $mediaStorage->locate((string)$media['owner_id'], (string)$media['storage_name']);
     if ($file === null || !in_array($media['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) { http_response_code(404); exit; }
     header('Content-Type: ' . $media['mime']);
@@ -442,13 +443,16 @@ $sharedIds = [];
 try {
     $query = $pdo->prepare(
         'SELECT media.id, media.owner_id, media.storage_name, media.original_name, media.mime, media.size_bytes, media.created_at, media.expires_at,
-                users.display_name, users.username
+                users.display_name, users.username, users.role AS owner_role
          FROM media JOIN users ON users.id = media.owner_id
          WHERE media.expires_at IS NULL OR media.expires_at > :now
          ORDER BY media.created_at DESC, media.id DESC'
     );
     $query->execute([':now' => time()]);
-    $images = $query->fetchAll(PDO::FETCH_ASSOC);
+    $images = array_values(array_filter(
+        $query->fetchAll(PDO::FETCH_ASSOC),
+        static fn(array $row): bool => mayViewMedia($currentUser, (string)$row['owner_id'], (string)$row['owner_role'])
+    ));
     // Only the ids of photos with an active share link; tokens never go into the gallery page.
     $activeShares = $pdo->prepare('SELECT DISTINCT media_id FROM share_links WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > :now)');
     $activeShares->execute([':now' => time()]);
@@ -507,7 +511,7 @@ if ($action === 'users' && $currentUser['role'] === 'admin') {
     if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     ?>
 <div class="title-row">
-  <div><h1>People</h1><p class="sub">Everyone here can see all photos. Members can delete only their own.</p></div>
+  <div><h1>People</h1><p class="sub">Members see all photos except those of guests. Guests see only their own photos. Only administrators see everything.</p></div>
   <a class="btn" href="./"><?= icon('back') ?>Back to photos</a>
 </div>
 <div class="cols">
@@ -520,7 +524,7 @@ if ($action === 'users' && $currentUser['role'] === 'admin') {
           <label>Username<input name="username" required minlength="3" maxlength="32" autocomplete="off"></label>
           <label>Display name<input name="display_name" required maxlength="80"></label>
           <label>Temporary password<input name="password" type="password" required minlength="12" autocomplete="new-password"></label>
-          <label>Role<select name="role"><option value="member">Member</option><option value="admin">Administrator</option></select></label>
+          <label>Role<select name="role"><option value="member">Member</option><option value="guest">Guest (sees only own photos)</option><option value="admin">Administrator</option></select></label>
         </div>
         <p class="hint">Passwords need at least 12 characters.</p>
         <div class="foot" style="justify-content:flex-start"><button class="btn primary">Create account</button></div>
@@ -533,7 +537,7 @@ if ($action === 'users' && $currentUser['role'] === 'admin') {
       <div class="person">
         <?= avatar((string)$account['id'], (string)$account['display_name']) ?>
         <div class="n"><b><?= h((string)$account['display_name']) ?></b><span>@<?= h((string)$account['username']) ?></span></div>
-        <span class="pill<?= $account['role'] === 'admin' ? ' admin' : '' ?>"><?= $account['role'] === 'admin' ? 'Administrator' : 'Member' ?></span>
+        <span class="pill<?= $account['role'] === 'admin' ? ' admin' : '' ?>"><?= h(roleLabel((string)$account['role'])) ?></span>
         <?php if (!$isActive): ?><span class="pill off">Disabled</span><?php endif; ?>
         <details class="reset">
           <summary class="btn sm">Reset password</summary>
@@ -842,6 +846,20 @@ function retentionOptions(): array {
     return ['never' => 'Forever', '1' => '1 day', '7' => '7 days', '30' => '30 days', '60' => '2 months', '90' => '3 months', '180' => '6 months'];
 }
 
+/**
+ * Who may see a photo: admins see everything, owners see their own, members see everything
+ * except photos of guests, and guests see only their own photos.
+ */
+function mayViewMedia(array $viewer, string $ownerId, string $ownerRole): bool {
+    if ($viewer['role'] === 'admin' || $viewer['id'] === $ownerId) return true;
+    return $viewer['role'] === 'member' && $ownerRole !== 'guest';
+}
+
+/** Human-readable name of a role. */
+function roleLabel(string $role): string {
+    return ['admin' => 'Administrator', 'guest' => 'Guest'][$role] ?? 'Member';
+}
+
 /** The retention period a user preselects for new uploads; falls back to Forever. */
 function userDefaultRetention(PDO $pdo, string $userId): string {
     $statement = $pdo->prepare('SELECT default_retention FROM users WHERE id = :id LIMIT 1');
@@ -1067,7 +1085,7 @@ CSS;
         echo '<button class="icon-btn" id="themeToggle" type="button" aria-label="Change theme"><span class="ti ti-system">' . icon('auto') . '</span><span class="ti ti-light">' . icon('sun') . '</span><span class="ti ti-dark">' . icon('moon') . '</span></button>';
         if ($user !== null) {
             echo '<details class="acct"><summary aria-label="Account menu">' . avatar((string)$user['id'], (string)$user['display_name']) . '<span class="nm">' . h((string)$user['display_name']) . '</span>' . icon('chevron') . '</summary><div class="menu">';
-            echo '<div class="who"><strong>' . h((string)$user['display_name']) . '</strong>' . ($user['role'] === 'admin' ? 'Administrator' : 'Member') . '</div>';
+            echo '<div class="who"><strong>' . h((string)$user['display_name']) . '</strong>' . h(roleLabel((string)$user['role'])) . '</div>';
             if ($user['role'] === 'admin') echo '<a href="?action=users">' . icon('users') . 'People and system</a>';
             echo '<button type="button" data-open-dialog="guideDialog">' . icon('help') . 'Quick guide</button><hr>';
             echo '<form method="post" action="?action=logout"><input type="hidden" name="csrf" value="' . h(csrf()) . '"><button>' . icon('logout') . 'Sign out</button></form></div></details>';

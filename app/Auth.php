@@ -10,7 +10,7 @@ declare(strict_types=1);
  */
 final class Auth
 {
-    private const ROLES = ['admin', 'member'];
+    private const ROLES = ['admin', 'member', 'guest'];
 
     private function __construct()
     {
@@ -153,7 +153,7 @@ final class Auth
         $displayName = self::normalizeDisplayName($displayName);
         self::validatePassword($password);
         if (!in_array($role, self::ROLES, true)) {
-            throw new InvalidArgumentException('Role must be admin or member.');
+            throw new InvalidArgumentException('Role must be admin, member or guest.');
         }
 
         $user = [

@@ -103,7 +103,7 @@ data_dir/
 - [x] Add simple admin actions: create, disable, and reset accounts; keep public self-registration off by default.
 - [x] Store password hashes with PHP `password_hash`, limit login attempts, and revoke sessions when an account is switched or disabled.
 - [x] Show all private group media in the gallery, with the uploader and upload date identified.
-- [x] Keep permissions to two roles: administrator and member. Admins manage accounts and all media; members upload and manage their own media.
+- [x] Keep permissions to three roles: administrator, member and guest. Admins manage accounts and see all media; members see everything except guests' photos; guests see only their own media.
 - [x] Enforce delete permissions so members cannot change other people’s media or accounts.
 
 **Done when:** every friend has an individual account, accounts can be disabled independently, and actions can be attributed to a person.

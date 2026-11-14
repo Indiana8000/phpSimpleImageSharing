@@ -1,0 +1,50 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping to improve phpSimpleImageSharing. Please do not paste passwords, session IDs or share tokens.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as a member
+        2. Open a photo
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: php
+    attributes:
+      label: PHP version
+      placeholder: "8.4.x"
+    validations:
+      required: true
+  - type: input
+    id: server
+    attributes:
+      label: Web server and hosting
+      placeholder: "Apache 2.4 on shared hosting, built-in PHP server, ..."
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: "Firefox 130 on Windows, Safari on iPhone, ..."
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: From the PHP error log. Remove tokens, passwords and private paths.
+      render: text

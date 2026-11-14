@@ -127,7 +127,7 @@ data_dir/
 - [x] Document a maintenance-window backup and restore for the SQLite database plus all media; an in-app export is still open.
 - [x] Document upgrades and safe defaults; keep configuration examples in sync when options change.
 - [x] Show PHP extensions, HTTPS status, upload limits, storage count, and stored media bytes in the admin area.
-- [ ] Prepare the GitHub release with a clear README, MIT license, screenshots, release notes, and an issue template.
+- [x] Prepare the GitHub release with a clear README, MIT license, screenshots, release notes, and an issue template.
 
 **Done when:** a technically curious person can install phpSimpleImageSharing on PHP hosting without a separate database server and restore it if needed.
 

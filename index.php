@@ -970,7 +970,7 @@ h2{margin:0}
 .pick input:checked+.circle{opacity:1;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .pick input:focus-visible+.circle{outline:2px solid var(--accent);outline-offset:2px}
 @media(hover:none){.pick .circle{opacity:1}.drop span{display:none}}
-.drop{display:grid;place-content:center;gap:6px;text-align:center;aspect-ratio:1;border-radius:10px;border:2px dashed var(--line);background:transparent;color:var(--muted);padding:10px}
+.drop{display:grid;place-content:center;gap:6px;text-align:center;aspect-ratio:1;min-width:0;overflow:hidden;border-radius:10px;border:2px dashed var(--line);background:transparent;color:var(--muted);padding:10px}
 .drop:hover{border-color:var(--accent);color:var(--accent);background:var(--tint)}
 .drop strong{color:var(--ink);font-size:14px}.drop svg{margin:0 auto;width:26px;height:26px}
 .empty{padding:34px 8px;text-align:center;color:var(--muted)}.empty h2{font-size:18px;color:var(--ink);margin-bottom:4px}
@@ -1074,7 +1074,7 @@ fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
 .pcard .link .btn{width:auto}
 .pcard input,.panel .field{height:38px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 10px;flex:1;min-width:0}
 
-@media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,1fr);gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
+@media(max-width:560px){.brand .full{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.mark{width:32px;height:32px}h1{font-size:24px}.grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:3px}.tile,.drop{border-radius:6px}.acct .nm{display:none}.stage{padding:0 0 12px}.nav.l{left:10px}.nav.r{right:10px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 CSS;
     echo '</style><body class="' . ($variant === 'viewer' ? 'viewer-page' : '') . '">';

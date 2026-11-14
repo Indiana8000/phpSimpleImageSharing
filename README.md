@@ -1,68 +1,75 @@
 # phpSimpleImageSharing
 
-A small, self-hosted media album for friends, designed for PHP 8.4 shared hosting. Each person has an individual account. The gallery and image delivery require sign-in.
+[![Lint](https://github.com/Indiana8000/phpSimpleImageSharing/actions/workflows/lint.yml/badge.svg)](https://github.com/Indiana8000/phpSimpleImageSharing/actions/workflows/lint.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![PHP 8.4](https://img.shields.io/badge/PHP-8.4-777bb4.svg)
+
+A small, private photo album for friends that you host yourself. One PHP file plus a few classes, SQLite for data, no Composer, no cron, no external services. It runs on ordinary shared hosting.
+
+![Gallery in the light theme](docs/screenshot-gallery-light.png)
+
+<p>
+  <img src="docs/screenshot-detail-dark.png" alt="Photo page with share link in the dark theme" width="49%">
+  <img src="docs/screenshot-upload.png" alt="Upload dialog with retention choices" width="49%">
+</p>
+
+## Features
+
+- **Private by default.** The gallery and all original files require sign-in. Accounts are created by an administrator; there is no public registration.
+- **Roles.** Administrators see everything and manage accounts. Members see all photos except those of guests. Guests see only their own photos.
+- **Upload.** Drag and drop, many files at once, per-file progress and retry. JPEG, PNG, GIF and WebP up to 12 MiB (configurable).
+- **Automatic deletion.** Keep a photo forever or delete it after 1, 7 or 30 days or 2, 3 or 6 months (months count as 30 days). The owner can change this at any time. Every person can save a default period. Expired files are removed during normal requests, so no cron job is needed.
+- **Share links.** Create a public, unguessable link for a single photo, copy it again later, replace it or stop sharing. Links expire with the photo. Invalid, revoked or expired links redirect to a Rick Astley video.
+- **Gallery tools.** Search, sort, filter (everyone, mine, expiring soon), paging, keyboard navigation, bulk copy of share links and bulk delete.
+- **Diagnostics.** The administrator page shows PHP extensions, HTTPS detection, upload limits and storage use.
+- **Interface.** Responsive, light and dark theme, system fonts only and no requests to other servers.
 
 ## Requirements
 
-- PHP 8.4 with `fileinfo`, `session`, and `pdo_sqlite`
-- Apache 2.4 with `.htaccess` enabled, or equivalent web-server protection for `config.php`
+- PHP 8.4 with `fileinfo`, `session` and `pdo_sqlite`
+- Apache 2.4 with `.htaccess` enabled (or equivalent protection for `config.php` and the share-link rewrite)
 - HTTPS
 - A writable data directory **outside** the public web root
 
 ## Installation
 
 1. Upload the repository files to the directory served by your host.
-2. Create a private directory outside the public web root, for example `~/private/phpSimpleImageSharing-data`, set its permissions to `700`, and grant the PHP process write access.
-3. Copy `config.example.php` to `config.php`. Set `data_dir` to the absolute path of the private directory and choose the first administrator's username and display name.
-4. Generate a password hash on your own computer with `php -r "echo password_hash('YOUR_LONG_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"` and set `password_hash` in `config.php`. This does not require shell access on the host. Use a long, unique password.
-5. Open the website over HTTPS and sign in with the configured admin username and password.
-6. Remove the `password_hash` setting from `config.php` after the first admin account is created; the database now owns account credentials.
-7. Use **Manage users** to create an individual account for each friend.
+2. Create a private directory outside the web root, for example `~/private/phpSimpleImageSharing-data`, with permissions `700` and write access for PHP.
+3. Copy `config.example.php` to `config.php` and set `data_dir` to that directory. Choose the first administrator's username and display name.
+4. Generate a password hash on your own computer (no shell access on the host needed) and put it in `config.php` as `password_hash`:
+   ```
+   php -r "echo password_hash('YOUR_LONG_PASSWORD', PASSWORD_DEFAULT), PHP_EOL;"
+   ```
+5. Open the site over HTTPS and sign in. Then remove `password_hash` from `config.php`; the database owns all credentials from now on.
+6. Create an account for each friend under **People and system** in the account menu.
 
-On first start, phpSimpleImageSharing creates `phpSimpleImageSharing.sqlite` in the data directory. Media files are stored in separate `users/<internal-user-id>/` subdirectories. Existing images from the earlier flat-file version are copied into the first administrator's folder on first start; the originals are left untouched.
+On first start the app creates `phpSimpleImageSharing.sqlite` in the data directory. Media files live in `users/<internal-user-id>/` below it. `config.php` is ignored by Git and blocked by the included `.htaccess`; never publish it.
 
-`config.php` is ignored by Git and blocked by the included Apache `.htaccess`. Do not publish it. Keep the data directory outside the public web root so the database, uploaded media, and journal files cannot be requested directly.
+## Operations
 
-## Current features and limits
+**Upload limits.** PHP's `upload_max_filesize` must be at least `max_upload_bytes` from `config.php`, and `post_max_size` a little higher. The browser gives each upload 120 seconds, so PHP and any proxy must allow enough time for your slowest expected connection. Keep free disk space for uploads and backups.
 
-- Individual administrator, member and guest accounts; public self-registration is disabled.
-- Visibility depends on the role: administrators see all photos; members see all photos except those of guests; guests see only their own photos. Members and guests can delete their own uploads; administrators can delete any upload and manage accounts. Share links work for anyone who has the link, whatever the role of the owner.
-- Drag-and-drop and multi-image upload with per-file progress and retry for failures.
-- Create a public, unguessable share link for one photo from its detail view. The owner or an administrator can copy the current link again, create a new one (which revokes the previous link), or stop sharing without creating a new link. Links expire when the photo expires.
-- In the gallery, photos with an active share link show a small link badge (visible only to the owner and administrators). Hovering a photo you may manage shows a button that copies its share link; if none exists yet, one is created first. Selecting photos adds a "Share links" action that copies all their links and creates the missing ones.
-- Invalid, revoked, and expired share links redirect to the Rick Astley video. The private gallery and ordinary image routes still require sign-in.
-- Choose whether each upload is kept forever or deleted after 1 day, 7 days, 30 days, or 2, 3, or 6 months (months count as 30 days). The owner or an administrator can change this at any time from the photo page, or switch automatic deletion off with Forever; the countdown restarts from the day of the change and an active share link follows the new date. Expired files are removed in small batches during signed-in requests; no cron job is required. Each person can save their own preselected period from the upload dialog ("Use this as my default").
-- Search filenames, sort by upload date, filter by everyone, your own photos, or photos expiring soon, and browse a paginated gallery. Each photo shows how long it will be kept. The detail view has previous/next navigation (also with the arrow keys), private-link copying, and original download.
-- Select several photos to copy their private links or delete them in one action; deletion permissions are checked per photo.
-- Administrators can check PHP extensions, HTTPS detection, configured upload limits, and stored media usage under **Manage users**.
-- JPEG, PNG, GIF, and WebP uploads, limited to 12 MiB by default.
-- Responsive interface with light and dark themes and a quick guide in the account menu; it uses system fonts and makes no requests to other servers.
-- Dates are displayed as `YYYY-MM-DD`.
-- Video support is planned.
+**Updating.** Back up first, then upload the new files while keeping `config.php` and the data directory. A database created by a newer release cannot be opened by an older one.
 
-Public share URLs use a 26-character random path token, for example `https://example.com/<token>`. Apache `mod_rewrite` routes it to `index.php?share=<token>`. Configure equivalent routes if using another web server. Share tokens are bearer credentials, so Apache access logs may contain them; keep those logs private. The token is also stored in the database so the photo's owner can copy the current link again; keep the data directory and its backups private.
+**Backup and restore.** There is no in-app backup yet. A backup must contain the database and all user media from the same moment:
 
-## Upload limits and maintenance
+1. Ask people to stop uploading and block access to the app for a moment (for example `Require all denied` in `.htaccess`).
+2. Copy the **entire** `data_dir`: `phpSimpleImageSharing.sqlite`, the full `users/` tree and any SQLite journal files. Store it privately, never under the web root.
+3. Lift the block. To restore, block access again and put back one complete backup set (database and `users/` together), then check the gallery.
 
-The PHP `upload_max_filesize` limit must be at least as large as `max_upload_bytes` in `config.php`. Set `post_max_size` a little higher to allow multipart form overhead. The upload request has a 120-second browser timeout; PHP and any host proxy must allow enough time to transfer a file at your expected connection speed. Keep enough free disk space for uploads and backups.
+Automatic deletion only affects the live data directory. Copies in host or external backups stay until those backups expire, so give them their own retention period.
 
-Before upgrades, back up the data directory as described below. Upload the new application files while preserving `config.php` and the private data directory. Do not replace the data directory when updating code. Database schema upgrades run automatically when the updated app starts; a database created by newer code cannot be opened by an older release. Keep PHP and Apache updated as well.
+## Security notes
 
-### Manual backup
+- Share tokens are 26-character random path tokens (`https://example.com/<token>`). They are bearer credentials: anyone with the link can see that photo. Web server access logs may contain them, so keep logs private.
+- The token is stored in the database so the owner can copy the link again. Keep the data directory and its backups private.
+- The HTTPS status check reads PHP's `HTTPS` variable. A reverse proxy that terminates TLS must pass the original scheme to PHP.
+- Please report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
 
-There is no in-app backup or restore feature yet. A backup must include the database and all user media from the same point in time.
+## Roadmap
 
-1. Ask users to stop uploading and wait for any active uploads to finish.
-2. Temporarily block the application's public directory (for example, add `Require all denied` to its `.htaccess`) so no new requests can write data. Wait for requests already in progress to finish.
-3. Use the hosting control panel or file manager to copy the **entire** configured `data_dir` to a private backup location. Include `phpSimpleImageSharing.sqlite`, the complete `users/` tree, and any SQLite journal files present. Do not publish the backup or place it under the public web root.
-4. Remove the temporary access block and confirm the app is available again.
+Video support is planned; see [todo.md](todo.md) for the product plan and open items.
 
-### Manual restore
+## License
 
-1. Block access to the app and wait for active requests to finish, as above.
-2. Restore the complete data directory from one backup set at the path configured by `data_dir`. Restore both the database and the complete `users/` tree together; do not mix files from different backup dates.
-3. Ensure the PHP process can access the restored directory and files, then remove the temporary access block and sign in to check the gallery.
-
-Automatic retention deletes expired files from the live data directory. It does not remove copies in host backups or external backups, so set a separate retention period for those backups.
-
-The HTTPS status check reads PHP's `HTTPS` server variable. A reverse proxy that terminates TLS must pass the original request scheme to PHP for that check to report HTTPS correctly.
+[MIT](LICENSE)

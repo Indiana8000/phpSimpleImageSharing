@@ -870,7 +870,7 @@ function userDefaultRetention(PDO $pdo, string $userId): string {
 
 function pageStart(string $title, string $variant = 'app'): void {
     $user = isset($GLOBALS['currentUser']) && is_array($GLOBALS['currentUser']) ? $GLOBALS['currentUser'] : null;
-    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>' . h($title) . ' · phpSimpleImageSharing</title>';
+    echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><link rel="icon" href="favicon.svg" type="image/svg+xml"><title>' . h($title) . ' · phpSimpleImageSharing</title>';
     echo '<script>(()=>{const r=document.documentElement;r.classList.add("js");let t="system";try{const s=localStorage.getItem("phpSimpleImageSharing-theme");if(s==="light"||s==="dark")t=s}catch{}if(t!=="system")r.dataset.theme=t;r.dataset.mode=t})()</script><style>';
     echo <<<'CSS'
 :root{--bg:#f4f5f7;--surface:#fff;--raised:#fff;--ink:#14171f;--muted:#667085;--line:#e3e5ea;--quiet:#eceef2;--accent:#3b4bff;--accent-ink:#fff;--tint:#e9ebff;--warn:#b86a00;--warn-bg:#fff1dc;--danger:#c4261d;--ok:#18794e;--r-ctl:10px;--font:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color-scheme:light}

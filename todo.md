@@ -14,7 +14,7 @@ Goal: a small, reliable private media album for friends that runs on ordinary PH
 
 ## Design direction
 
-Chosen direction (2026-11-06, replaces the earlier **C · Album** direction from `design-directions.html`): a neutral, photo-first interface. Cool grey surfaces so photos provide the color, one indigo accent, system fonts (no external requests), an edge-to-edge photo grid with an expiry bar on every photo, and a dark photo viewer.
+Chosen direction (2026-11-06): a neutral, photo-first interface. Cool grey surfaces so photos provide the color, one indigo accent, system fonts (no external requests), an edge-to-edge photo grid with an expiry bar on every photo, and a photo viewer that follows the light or dark theme.
 
 - [x] Implement light and dark themes with CSS variables; follow the system preference on first visit.
 - [x] Provide an easy-to-find light/dark/system switch and save the manual choice in the browser.

@@ -623,7 +623,7 @@ if ($action === 'detail') {
   </div>
   <div class="vbody">
     <div class="stage">
-      <img src="<?= h($detailImageUrl) ?>" alt="<?= h((string)$detail['original_name']) ?>">
+      <img src="<?= h($detailImageUrl) ?>" fetchpriority="high" alt="<?= h((string)$detail['original_name']) ?>">
       <?php if ($previousUrl !== null): ?><a class="nav l" href="<?= h($previousUrl) ?>" rel="prev" aria-label="Previous photo"><?= icon('back') ?></a><?php endif; ?>
       <?php if ($nextUrl !== null): ?><a class="nav r" href="<?= h($nextUrl) ?>" rel="next" aria-label="Next photo"><?= icon('next') ?></a><?php endif; ?>
     </div>
@@ -885,7 +885,7 @@ function pageStart(string $title, string $variant = 'app'): void {
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]):not([data-theme=dark]){color-scheme:dark;--bg:#0f1115;--surface:#171a20;--raised:#1d2129;--ink:#eceef3;--muted:#98a0b0;--line:#2a2f39;--quiet:#222731;--accent:#8590ff;--accent-ink:#0d1030;--tint:#262b52;--warn:#f0b35a;--warn-bg:#3a2d17;--danger:#ff7a70;--ok:#5fd29a}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);min-height:100vh}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);min-height:100vh;min-height:100dvh}
 button,input,select{font:inherit;color:inherit}
 button{cursor:pointer}
 a{color:var(--accent)}
@@ -991,8 +991,8 @@ h2{margin:0}
 .selbar .btn:hover{background:rgba(127,127,127,.28)}
 .selbar .icon-btn{width:36px;height:36px}
 
-dialog.modal{border:0;padding:0;border-radius:20px;background:var(--surface);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100vh - 24px);box-shadow:0 24px 60px rgba(0,0,0,.35)}
-dialog.modal::backdrop{background:rgba(8,10,14,.55)}
+dialog.modal{border:0;padding:0;border-radius:20px;background:var(--surface);color:var(--ink);width:min(520px,calc(100% - 24px));max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overscroll-behavior:contain;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+dialog.modal::backdrop{background:rgba(8,10,14,.55);overflow:hidden;overscroll-behavior:contain}
 #uploadDialog{width:min(720px,calc(100% - 24px))}
 @media(max-width:640px){#uploadDialog,dialog.modal{margin:auto auto 0;border-radius:20px 20px 0 0;width:100%;max-width:none}}
 .sheet-in{padding:22px 20px 20px}
@@ -1044,21 +1044,21 @@ fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
 .chk-l .d.bad{background:color-mix(in srgb,var(--danger) 18%,var(--surface));color:var(--danger)}
 .chk-l small{display:block;color:var(--muted);overflow-wrap:anywhere}
 
-.login{min-height:calc(100vh - 220px);display:grid;place-items:center}
+.login{min-height:calc(100vh - 220px);min-height:calc(100dvh - 220px);display:grid;place-items:center}
 .login-form{width:min(400px,100%);display:grid;gap:12px}
 .login-form h1{font-size:34px}
 .login-form label{display:grid;gap:6px;font-weight:600;font-size:14px}
 .login-form input{height:46px;border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-weight:400}
 .login-form .btn{min-height:46px}
 
-.vwrap{min-height:100vh;display:grid;grid-template-rows:auto 1fr}
+.vwrap{min-height:100vh;min-height:100dvh;display:grid;grid-template-rows:auto 1fr}
 .vtop{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;height:56px;padding:0 16px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .vtop .icon-btn{margin-left:-8px}
 .vtop .t{flex:1;min-width:0}.vtop .t b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.vtop .cnt{font-size:13px;color:var(--muted);white-space:nowrap}
 .vbody{display:grid;grid-template-columns:1fr;min-height:0}
 @media(min-width:900px){.vbody{grid-template-columns:1fr 340px}}
 .stage{position:relative;display:grid;place-items:center;min-height:0;padding:0 12px 12px}
-.stage img{max-width:100%;max-height:calc(100vh - 90px);border-radius:12px;display:block;object-fit:contain}
+.stage img{max-width:100%;max-height:calc(100vh - 90px);max-height:calc(100dvh - 90px);border-radius:12px;display:block;object-fit:contain}
 .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;display:grid;place-items:center;text-decoration:none;backdrop-filter:blur(4px)}
 .nav:hover{background:rgba(0,0,0,.68)}.nav.l{left:22px}.nav.r{right:22px}
 .panel{padding:6px 18px 32px;display:flex;flex-direction:column;gap:14px}

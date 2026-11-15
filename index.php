@@ -66,6 +66,7 @@ ini_set('session.use_only_cookies', '1');
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Strict');
 const SESSION_LIFETIME = 30 * 86400;
+const SESSION_MAX_AGE = 90 * 86400;
 // Own save path: shared hosts often clean the default one after a short gc_maxlifetime.
 $sessionPath = $dataDir . '/sessions';
 if (!is_dir($sessionPath)) @mkdir($sessionPath, 0700, true);
@@ -133,7 +134,8 @@ if (array_key_exists('share', $_GET)) {
 $currentUser = null;
 $sessionUserId = (string)($_SESSION['user_id'] ?? '');
 if ($sessionUserId !== '') {
-    $sessionExpired = time() - (int)($_SESSION['last_activity'] ?? 0) > SESSION_LIFETIME;
+    $sessionExpired = time() - (int)($_SESSION['last_activity'] ?? 0) > SESSION_LIFETIME
+        || time() - (int)($_SESSION['created_at'] ?? 0) > SESSION_MAX_AGE;
     if (!$sessionExpired) $currentUser = Auth::findById($pdo, $sessionUserId);
     if ($currentUser === null || (int)$currentUser['active'] !== 1 || (int)($currentUser['auth_version'] ?? 0) !== (int)($_SESSION['auth_version'] ?? -1)) {
         $_SESSION = [];
@@ -155,7 +157,7 @@ if ($currentUser === null) {
             if ($user !== null) {
                 LoginRateLimiter::clear($pdo, $loginThrottleKey);
                 session_regenerate_id(true);
-                $_SESSION = ['user_id' => $user['id'], 'auth_version' => (int)$user['auth_version'], 'last_activity' => time(), 'csrf' => bin2hex(random_bytes(32))];
+                $_SESSION = ['user_id' => $user['id'], 'auth_version' => (int)$user['auth_version'], 'last_activity' => time(), 'created_at' => time(), 'csrf' => bin2hex(random_bytes(32))];
                 header('Location: ./'); exit;
             }
             $failures = LoginRateLimiter::recordFailure($pdo, $loginThrottleKey);

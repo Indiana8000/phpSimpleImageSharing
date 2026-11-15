@@ -49,7 +49,7 @@ On first start the app creates `phpSimpleImageSharing.sqlite` in the data direct
 
 **Upload limits.** PHP's `upload_max_filesize` must be at least `max_upload_bytes` from `config.php`, and `post_max_size` a little higher. The browser gives each upload 120 seconds, so PHP and any proxy must allow enough time for your slowest expected connection. Keep free disk space for uploads and backups.
 
-**Sessions.** Sign-in stays valid for 30 days of inactivity, even after the browser is closed. Session files are kept in `data_dir/sessions` so the host's own session cleanup cannot end them early. They do not need to be backed up.
+**Sessions.** Sign-in stays valid for 30 days of inactivity, even after the browser is closed, but never longer than 90 days in total. Session files are kept in `data_dir/sessions` so the host's own session cleanup cannot end them early. They do not need to be backed up.
 
 **Updating.** Back up first, then upload the new files while keeping `config.php` and the data directory. A database created by a newer release cannot be opened by an older one.
 

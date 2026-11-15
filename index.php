@@ -65,8 +65,13 @@ ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Strict');
-ini_set('session.cookie_lifetime', '0');
-ini_set('session.gc_maxlifetime', '43200');
+const SESSION_LIFETIME = 30 * 86400;
+// Own save path: shared hosts often clean the default one after a short gc_maxlifetime.
+$sessionPath = $dataDir . '/sessions';
+if (!is_dir($sessionPath)) @mkdir($sessionPath, 0700, true);
+if (is_dir($sessionPath) && is_writable($sessionPath)) session_save_path($sessionPath);
+ini_set('session.cookie_lifetime', (string)SESSION_LIFETIME);
+ini_set('session.gc_maxlifetime', (string)SESSION_LIFETIME);
 if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
     ini_set('session.cookie_secure', '1');
 }
@@ -128,7 +133,7 @@ if (array_key_exists('share', $_GET)) {
 $currentUser = null;
 $sessionUserId = (string)($_SESSION['user_id'] ?? '');
 if ($sessionUserId !== '') {
-    $sessionExpired = time() - (int)($_SESSION['last_activity'] ?? 0) > 43200;
+    $sessionExpired = time() - (int)($_SESSION['last_activity'] ?? 0) > SESSION_LIFETIME;
     if (!$sessionExpired) $currentUser = Auth::findById($pdo, $sessionUserId);
     if ($currentUser === null || (int)$currentUser['active'] !== 1 || (int)($currentUser['auth_version'] ?? 0) !== (int)($_SESSION['auth_version'] ?? -1)) {
         $_SESSION = [];

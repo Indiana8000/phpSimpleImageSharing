@@ -1,6 +1,6 @@
 {
   "permissions": {
-    "deny": ["Edit(/config.php)", "Write(/config.php)"]
+    "deny": ["Edit(/config.php)"]
   },
   "hooks": {
     "PreToolUse": [

@@ -218,6 +218,54 @@ final class Auth
         $update->execute([':new_active' => $newActive, ':old_active' => $newActive, ':id' => $targetUserId]);
     }
 
+    /**
+     * Permanently delete an account together with all of its media files and share links.
+     * Administrators cannot delete their own account, so at least one administrator always remains.
+     *
+     * @return int Number of media items that were deleted with the account.
+     */
+    public static function deleteUser(PDO $pdo, array $actor, string $targetUserId, MediaStorage $storage): int
+    {
+        self::requireAdmin($actor);
+        if (hash_equals((string)$actor['id'], $targetUserId)) {
+            throw new RuntimeException('You cannot delete your own account.');
+        }
+
+        // The write lock keeps uploads for this account from racing with the deletion.
+        $pdo->exec('BEGIN IMMEDIATE TRANSACTION');
+        try {
+            $find = $pdo->prepare('SELECT id FROM users WHERE id = :id LIMIT 1');
+            $find->execute([':id' => $targetUserId]);
+            if ($find->fetchColumn() === false) {
+                throw new RuntimeException('User not found.');
+            }
+
+            $items = $pdo->prepare('SELECT storage_name, poster_name FROM media WHERE owner_id = :id');
+            $items->execute([':id' => $targetUserId]);
+            $mediaCount = 0;
+            foreach ($items->fetchAll(PDO::FETCH_ASSOC) as $media) {
+                $storage->delete($targetUserId, (string)$media['storage_name']);
+                if (is_string($media['poster_name']) && $media['poster_name'] !== '') {
+                    $storage->delete($targetUserId, $media['poster_name']);
+                }
+                $mediaCount++;
+            }
+
+            // Foreign keys cascade to the account's media rows and their share links.
+            $pdo->prepare('DELETE FROM users WHERE id = :id')->execute([':id' => $targetUserId]);
+            $pdo->exec('COMMIT');
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->exec('ROLLBACK');
+            }
+            throw $exception;
+        }
+
+        // Remove anything left in the account's directory (for example orphaned files).
+        $storage->deleteUserDirectory($targetUserId);
+        return $mediaCount;
+    }
+
     private static function requireAdmin(array $actor): void
     {
         if (($actor['role'] ?? null) !== 'admin' || (int)($actor['active'] ?? 0) !== 1) {

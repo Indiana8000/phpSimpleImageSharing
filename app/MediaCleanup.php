@@ -28,7 +28,7 @@ final class MediaCleanup
 
         try {
             $select = $pdo->prepare(
-                'SELECT id, owner_id, storage_name
+                'SELECT id, owner_id, storage_name, poster_name
                  FROM media
                  WHERE expires_at IS NOT NULL AND expires_at <= :now
                  ORDER BY expires_at ASC, id ASC
@@ -46,6 +46,9 @@ final class MediaCleanup
 
             foreach ($expired as $media) {
                 $storage->delete((string)$media['owner_id'], (string)$media['storage_name']);
+                if (is_string($media['poster_name']) && $media['poster_name'] !== '') {
+                    $storage->delete((string)$media['owner_id'], $media['poster_name']);
+                }
             }
 
             $delete = $pdo->prepare(

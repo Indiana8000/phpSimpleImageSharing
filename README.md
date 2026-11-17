@@ -15,9 +15,9 @@ A small, private photo album for friends that you host yourself. One PHP file pl
 
 ## Features
 
-- **Private by default.** The gallery and all original files require sign-in. Accounts are created by an administrator; there is no public registration.
+- **Private by default.** The gallery and all original files require sign-in. Accounts are created by an administrator; there is no public registration. Administrators can disable an account or delete it permanently, which also deletes all of its photos, videos and share links (not their own account).
 - **Roles.** Administrators see everything and manage accounts. Members see all photos except those of guests. Guests see only their own photos.
-- **Upload.** Drag and drop, many files at once, per-file progress and retry. JPEG, PNG, GIF and WebP up to 12 MiB (configurable).
+- **Upload.** Drag and drop, many files at once, per-file progress and retry. JPEG, PNG, GIF and WebP up to 12 MiB, MP4, WebM and MOV videos up to 200 MiB (both configurable). Videos are stored and played as uploaded, with seeking; the server never transcodes. The browser creates the thumbnail, so a video it cannot decode (for example some iPhone HEVC files) is shown without one and may only be downloadable on other devices.
 - **Automatic deletion.** Keep a photo forever or delete it after 1, 7 or 30 days or 2, 3 or 6 months (months count as 30 days). The owner can change this at any time. Every person can save a default period. Expired files are removed during normal requests, so no cron job is needed.
 - **Share links.** Create a public, unguessable link for a single photo, copy it again later, replace it or stop sharing. Links expire with the photo. Invalid, revoked or expired links redirect to a Rick Astley video.
 - **Gallery tools.** Search, sort, filter (everyone, mine, expiring soon), paging, keyboard navigation, bulk copy of share links and bulk delete.
@@ -47,11 +47,11 @@ On first start the app creates `phpSimpleImageSharing.sqlite` in the data direct
 
 ## Operations
 
-**Upload limits.** PHP's `upload_max_filesize` must be at least `max_upload_bytes` from `config.php`, and `post_max_size` a little higher. The browser gives each upload 120 seconds, so PHP and any proxy must allow enough time for your slowest expected connection. Keep free disk space for uploads and backups.
+**Upload limits.** PHP's `upload_max_filesize` must be at least the larger of `max_upload_bytes` and `max_video_upload_bytes` from `config.php`, and `post_max_size` 1 MiB higher. Many hosts default to 64-256 MiB, so lower `max_video_upload_bytes` if they do not allow more. The browser allows each upload at least 120 seconds, plus one second per 256 KiB, so PHP (`max_execution_time`, `max_input_time`) and any proxy must allow enough time for your slowest expected connection. Keep free disk space for uploads and backups.
 
 **Sessions.** Sign-in stays valid for 30 days of inactivity, even after the browser is closed, but never longer than 90 days in total. Session files are kept in `data_dir/sessions` so the host's own session cleanup cannot end them early. They do not need to be backed up.
 
-**Updating.** Back up first, then upload the new files while keeping `config.php` and the data directory. A database created by a newer release cannot be opened by an older one.
+**Updating.** Back up first, then upload the new files while keeping `config.php` and the data directory. The database is upgraded automatically on the first request (the video release adds two columns). A database created by a newer release cannot be opened by an older one. Add `max_video_upload_bytes` to `config.php` if you want a value other than 200 MiB.
 
 **Backup and restore.** There is no in-app backup yet. A backup must contain the database and all user media from the same moment:
 
@@ -70,7 +70,7 @@ Automatic deletion only affects the live data directory. Copies in host or exter
 
 ## Roadmap
 
-Video support is planned; see [todo.md](todo.md) for the product plan and open items.
+See [todo.md](todo.md) for the product plan and open items.
 
 ## License
 

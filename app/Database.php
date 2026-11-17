@@ -10,7 +10,7 @@ declare(strict_types=1);
 final class Database
 {
     private const DATABASE_FILE = 'phpSimpleImageSharing.sqlite';
-    private const SCHEMA_VERSION = 1;
+    private const SCHEMA_VERSION = 2;
     private const BUSY_TIMEOUT_MS = 5000;
 
     /**
@@ -69,8 +69,12 @@ final class Database
                 self::createInitialSchema($pdo);
                 self::createLoginAttemptsTable($pdo);
                 $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
+            } elseif ($version === 1) {
+                // Version 2 adds video support: an optional poster file and the duration.
+                $pdo->exec('ALTER TABLE media ADD COLUMN poster_name TEXT');
+                $pdo->exec('ALTER TABLE media ADD COLUMN duration_seconds INTEGER');
+                $pdo->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
             } elseif ($version !== self::SCHEMA_VERSION) {
-                // No released version used an older layout, so there is nothing to migrate.
                 throw new RuntimeException('Unsupported development database; delete it to start fresh.');
             }
             $pdo->exec('COMMIT');
@@ -108,6 +112,8 @@ final class Database
                 size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
                 created_at INTEGER NOT NULL,
                 expires_at INTEGER,
+                poster_name TEXT,
+                duration_seconds INTEGER,
                 FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
                 UNIQUE (owner_id, storage_name)
             )

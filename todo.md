@@ -101,6 +101,7 @@ data_dir/
 
 - [x] Replace the shared password with individual user accounts.
 - [x] Add simple admin actions: create, disable, and reset accounts; keep public self-registration off by default.
+- [x] Let administrators delete an account (never their own); this permanently removes the account's media files, posters and share links.
 - [x] Store password hashes with PHP `password_hash`, limit login attempts, and revoke sessions when an account is switched or disabled.
 - [x] Show all private group media in the gallery, with the uploader and upload date identified.
 - [x] Keep permissions to three roles: administrator, member and guest. Admins manage accounts and see all media; members see everything except guests' photos; guests see only their own media.
@@ -133,10 +134,10 @@ data_dir/
 
 ## 7. Add media types after images are stable
 
-- [ ] Structure media metadata and delivery so type, size, duration, and thumbnails can be added without rebuilding the gallery.
-- [ ] Set file-size, storage, and supported-container limits before adding video; do not require server-side transcoding.
-- [ ] Add video upload and browser playback; check HTTP Range delivery for reliable seeking.
-- [ ] Offer unsupported formats as downloads or reject them with a clear explanation.
+- [x] Structure media metadata and delivery so type, size, duration, and thumbnails can be added without rebuilding the gallery.
+- [x] Set file-size, storage, and supported-container limits before adding video; do not require server-side transcoding.
+- [x] Add video upload and browser playback; check HTTP Range delivery for reliable seeking.
+- [x] Offer unsupported formats as downloads or reject them with a clear explanation.
 - [ ] Show storage use per item and in total; provide a simple cleanup workflow.
 
 **Done when:** a video can be uploaded within clear hosting limits and played in the browser or clearly offered as a download.

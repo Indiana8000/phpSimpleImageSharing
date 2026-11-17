@@ -8,15 +8,35 @@ declare(strict_types=1);
 final class MediaStorage
 {
     /** @var array<string, string> */
-    private const MIME_EXTENSIONS = [
+    private const IMAGE_MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/gif' => 'gif',
         'image/webp' => 'webp',
     ];
 
+    /** @var array<string, string> */
+    private const VIDEO_MIME_EXTENSIONS = [
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/quicktime' => 'mov',
+    ];
+
     private const ID_PATTERN = '/\A[a-f0-9]{32,64}\z/';
-    private const STORAGE_NAME_PATTERN = '/\A[a-f0-9]{32}\.(?:jpg|png|gif|webp)\z/';
+    private const STORAGE_NAME_PATTERN = '/\A[a-f0-9]{32}(?:\.(?:jpg|png|gif|webp|mp4|webm|mov)|-poster\.jpg)\z/';
+    private const MAX_POSTER_BYTES = 2 * 1024 * 1024;
+    private const MAX_POSTER_DIMENSION = 4096;
+
+    /** @return list<string> */
+    public static function allowedMimes(): array
+    {
+        return array_merge(array_keys(self::IMAGE_MIME_EXTENSIONS), array_keys(self::VIDEO_MIME_EXTENSIONS));
+    }
+
+    public static function isVideoMime(string $mime): bool
+    {
+        return isset(self::VIDEO_MIME_EXTENSIONS[$mime]);
+    }
 
     private string $dataDirectory;
 
@@ -38,14 +58,14 @@ final class MediaStorage
      * Validate and store a PHP upload under a random name in the owner's directory.
      *
      * @param array<string, mixed> $upload One entry from $_FILES.
-     * @return array{id: string, storage_name: string, original_name: string, mime: string, size_bytes: int}
+     * @return array{id: string, storage_name: string, original_name: string, mime: string, size_bytes: int, kind: string}
      * @throws InvalidArgumentException For invalid owner IDs or unsupported/invalid uploads.
      * @throws RuntimeException If the file cannot be stored.
      */
-    public function storeUploadedFile(string $ownerId, array $upload, int $maxBytes): array
+    public function storeUploadedFile(string $ownerId, array $upload, int $maxImageBytes, int $maxVideoBytes): array
     {
         $this->assertId($ownerId, 'owner');
-        if ($maxBytes < 1) {
+        if ($maxImageBytes < 1 || $maxVideoBytes < 1) {
             throw new InvalidArgumentException('The upload size limit must be positive.');
         }
 
@@ -60,20 +80,28 @@ final class MediaStorage
         }
 
         $size = filesize($temporaryPath);
-        if ($size === false || $size < 1 || $size > $maxBytes) {
-            throw new InvalidArgumentException('The uploaded file is empty or exceeds the upload limit.');
+        if ($size === false || $size < 1) {
+            throw new InvalidArgumentException('The uploaded file is empty.');
         }
 
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->file($temporaryPath);
-        if (!is_string($mime) || !isset(self::MIME_EXTENSIONS[$mime])) {
-            throw new InvalidArgumentException('This image format is not supported.');
+        if (!is_string($mime) || !in_array($mime, self::allowedMimes(), true)) {
+            throw new InvalidArgumentException('This format is not supported. Use JPEG, PNG, GIF, WebP, MP4, WebM or MOV.');
         }
-        if (@getimagesize($temporaryPath) === false) {
+        $isVideo = self::isVideoMime($mime);
+        if ($size > ($isVideo ? $maxVideoBytes : $maxImageBytes)) {
+            throw new InvalidArgumentException('The uploaded file exceeds the upload limit.');
+        }
+        if ($isVideo) {
+            if (!$this->hasVideoSignature($temporaryPath, $mime)) {
+                throw new InvalidArgumentException('The uploaded file is not a valid video.');
+            }
+        } elseif (@getimagesize($temporaryPath) === false) {
             throw new InvalidArgumentException('The uploaded file is not a valid image.');
         }
 
-        $extension = self::MIME_EXTENSIONS[$mime];
+        $extension = $isVideo ? self::VIDEO_MIME_EXTENSIONS[$mime] : self::IMAGE_MIME_EXTENSIONS[$mime];
         $userDirectory = $this->userDirectory($ownerId, true);
 
         // A 128-bit random ID keeps paths unpredictable and compact while making collisions negligible.
@@ -101,10 +129,67 @@ final class MediaStorage
                 'original_name' => $this->cleanOriginalName($upload['name'] ?? ''),
                 'mime' => $mime,
                 'size_bytes' => $storedSize,
+                'kind' => $isVideo ? 'video' : 'image',
             ];
         }
 
         throw new RuntimeException('Could not allocate a unique media filename. Please retry the upload.');
+    }
+
+    /**
+     * Store the browser-generated poster frame of a video next to it.
+     * Returns the storage name, or null when the poster is missing or invalid
+     * (the video is then simply shown without a thumbnail).
+     *
+     * @param array<string, mixed>|null $upload One entry from $_FILES.
+     */
+    public function storePoster(string $ownerId, string $mediaId, ?array $upload): ?string
+    {
+        $this->assertId($ownerId, 'owner');
+        $this->assertId($mediaId, 'media');
+        if ($upload === null || (int)($upload['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return null;
+        }
+        $temporaryPath = $upload['tmp_name'] ?? null;
+        if (!is_string($temporaryPath) || $temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+            return null;
+        }
+        $size = filesize($temporaryPath);
+        if ($size === false || $size < 1 || $size > self::MAX_POSTER_BYTES) {
+            return null;
+        }
+        $mime = (new finfo(FILEINFO_MIME_TYPE))->file($temporaryPath);
+        $dimensions = @getimagesize($temporaryPath);
+        if ($mime !== 'image/jpeg' || $dimensions === false
+            || $dimensions[0] > self::MAX_POSTER_DIMENSION || $dimensions[1] > self::MAX_POSTER_DIMENSION) {
+            return null;
+        }
+
+        $storageName = $mediaId . '-poster.jpg';
+        if (!preg_match(self::STORAGE_NAME_PATTERN, $storageName)) {
+            return null;
+        }
+        $destination = $this->userDirectory($ownerId, true) . DIRECTORY_SEPARATOR . $storageName;
+        if (file_exists($destination) || is_link($destination) || !move_uploaded_file($temporaryPath, $destination)) {
+            return null;
+        }
+        @chmod($destination, 0600);
+        return $storageName;
+    }
+
+    /** Check the container magic bytes so a renamed file cannot pass as a video. */
+    private function hasVideoSignature(string $path, string $mime): bool
+    {
+        $handle = @fopen($path, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+        $head = (string)fread($handle, 12);
+        fclose($handle);
+        if ($mime === 'video/webm') {
+            return str_starts_with($head, "\x1A\x45\xDF\xA3");
+        }
+        return strlen($head) >= 12 && substr($head, 4, 4) === 'ftyp';
     }
 
     /** Return the absolute path of an existing stored file, or null if it is absent. */
@@ -141,6 +226,27 @@ final class MediaStorage
         }
 
         return true;
+    }
+
+    /** Remove an account's directory with every regular file left in it. Best effort. */
+    public function deleteUserDirectory(string $ownerId): void
+    {
+        $this->assertId($ownerId, 'owner');
+        $directory = $this->userDirectory($ownerId, false);
+        if ($directory === null) {
+            return;
+        }
+        foreach (scandir($directory) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $directory . DIRECTORY_SEPARATOR . $entry;
+            // Only plain files are removed; never follow links or descend into subdirectories.
+            if (is_file($path) || is_link($path)) {
+                @unlink($path);
+            }
+        }
+        @rmdir($directory);
     }
 
     private function assertId(string $id, string $kind): void

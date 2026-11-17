@@ -1041,7 +1041,7 @@ h2{margin:0}
 .drop strong{color:var(--ink);font-size:14px}.drop svg{margin:0 auto;width:26px;height:26px}
 .empty{padding:34px 8px;text-align:center;color:var(--muted)}.empty h2{font-size:18px;color:var(--ink);margin-bottom:4px}
 .pager{display:flex;justify-content:center;align-items:center;gap:14px;margin:22px 0;color:var(--muted);font-size:14px}
-.dragging body::after,.dragging::after{content:"Drop files to add them";position:fixed;inset:10px;z-index:200;border:3px dashed var(--accent);border-radius:20px;background:color-mix(in srgb,var(--accent) 12%,transparent);display:grid;place-items:center;font-weight:700;font-size:20px;color:var(--accent);pointer-events:none}
+.dragging::after{content:"Drop files to add them";position:fixed;inset:10px;z-index:200;border:3px dashed var(--accent);border-radius:20px;background:color-mix(in srgb,var(--accent) 12%,transparent);display:grid;place-items:center;font-weight:700;font-size:20px;color:var(--accent);pointer-events:none}
 
 .selbar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,0);display:flex;align-items:center;gap:4px;padding:8px 8px 8px 16px;border-radius:999px;background:var(--ink);color:var(--bg);box-shadow:0 10px 30px rgba(0,0,0,.28);z-index:30;white-space:nowrap;max-width:calc(100% - 16px);margin:0;transition:opacity .15s,transform .15s}
 .js .selbar:not(.on){opacity:0;pointer-events:none;transform:translate(-50%,20px)}

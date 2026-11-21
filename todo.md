@@ -137,6 +137,7 @@ data_dir/
 - [x] Structure media metadata and delivery so type, size, duration, and thumbnails can be added without rebuilding the gallery.
 - [x] Set file-size, storage, and supported-container limits before adding video; do not require server-side transcoding.
 - [x] Add video upload and browser playback; check HTTP Range delivery for reliable seeking.
+- [x] Add audio upload and browser playback (MP3, M4A, OGG, WAV, FLAC, AAC) with a generic file-icon thumbnail showing the extension; audio shares the video size limit.
 - [x] Offer unsupported formats as downloads or reject them with a clear explanation.
 - [ ] Show storage use per item and in total; provide a simple cleanup workflow.
 

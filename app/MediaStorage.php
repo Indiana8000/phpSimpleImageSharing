@@ -22,15 +22,42 @@ final class MediaStorage
         'video/quicktime' => 'mov',
     ];
 
+    /** Canonical MIME types stored for audio; finfo reports several aliases (see AUDIO_MIME_ALIASES). */
+    private const AUDIO_MIME_EXTENSIONS = [
+        'audio/mpeg' => 'mp3',
+        'audio/mp4' => 'm4a',
+        'audio/ogg' => 'ogg',
+        'audio/wav' => 'wav',
+        'audio/flac' => 'flac',
+        'audio/aac' => 'aac',
+    ];
+
+    /** @var array<string, string> */
+    private const AUDIO_MIME_ALIASES = [
+        'audio/x-m4a' => 'audio/mp4',
+        'audio/m4a' => 'audio/mp4',
+        'application/ogg' => 'audio/ogg',
+        'audio/x-wav' => 'audio/wav',
+        'audio/wave' => 'audio/wav',
+        'audio/vnd.wave' => 'audio/wav',
+        'audio/x-flac' => 'audio/flac',
+        'audio/x-hx-aac-adts' => 'audio/aac',
+    ];
+
     private const ID_PATTERN = '/\A[a-f0-9]{32,64}\z/';
-    private const STORAGE_NAME_PATTERN = '/\A[a-f0-9]{32}(?:\.(?:jpg|png|gif|webp|mp4|webm|mov)|-poster\.jpg)\z/';
+    private const STORAGE_NAME_PATTERN = '/\A[a-f0-9]{32}(?:\.(?:jpg|png|gif|webp|mp4|webm|mov|mp3|m4a|ogg|wav|flac|aac)|-poster\.jpg)\z/';
     private const MAX_POSTER_BYTES = 2 * 1024 * 1024;
     private const MAX_POSTER_DIMENSION = 4096;
 
     /** @return list<string> */
     public static function allowedMimes(): array
     {
-        return array_merge(array_keys(self::IMAGE_MIME_EXTENSIONS), array_keys(self::VIDEO_MIME_EXTENSIONS));
+        return array_merge(array_keys(self::IMAGE_MIME_EXTENSIONS), array_keys(self::VIDEO_MIME_EXTENSIONS), array_keys(self::AUDIO_MIME_EXTENSIONS));
+    }
+
+    public static function isAudioMime(string $mime): bool
+    {
+        return isset(self::AUDIO_MIME_EXTENSIONS[$mime]);
     }
 
     public static function isVideoMime(string $mime): bool
@@ -86,22 +113,26 @@ final class MediaStorage
 
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime = $finfo->file($temporaryPath);
+        if (is_string($mime) && isset(self::AUDIO_MIME_ALIASES[$mime])) {
+            $mime = self::AUDIO_MIME_ALIASES[$mime];
+        }
         if (!is_string($mime) || !in_array($mime, self::allowedMimes(), true)) {
-            throw new InvalidArgumentException('This format is not supported. Use JPEG, PNG, GIF, WebP, MP4, WebM or MOV.');
+            throw new InvalidArgumentException('This format is not supported. Use JPEG, PNG, GIF, WebP, MP4, WebM, MOV, MP3, M4A, OGG, WAV, FLAC or AAC.');
         }
         $isVideo = self::isVideoMime($mime);
-        if ($size > ($isVideo ? $maxVideoBytes : $maxImageBytes)) {
+        $isAudio = self::isAudioMime($mime);
+        if ($size > ($isVideo || $isAudio ? $maxVideoBytes : $maxImageBytes)) {
             throw new InvalidArgumentException('The uploaded file exceeds the upload limit.');
         }
         if ($isVideo) {
             if (!$this->hasVideoSignature($temporaryPath, $mime)) {
                 throw new InvalidArgumentException('The uploaded file is not a valid video.');
             }
-        } elseif (@getimagesize($temporaryPath) === false) {
+        } elseif (!$isAudio && @getimagesize($temporaryPath) === false) {
             throw new InvalidArgumentException('The uploaded file is not a valid image.');
         }
 
-        $extension = $isVideo ? self::VIDEO_MIME_EXTENSIONS[$mime] : self::IMAGE_MIME_EXTENSIONS[$mime];
+        $extension = $isVideo ? self::VIDEO_MIME_EXTENSIONS[$mime] : ($isAudio ? self::AUDIO_MIME_EXTENSIONS[$mime] : self::IMAGE_MIME_EXTENSIONS[$mime]);
         $userDirectory = $this->userDirectory($ownerId, true);
 
         // A 128-bit random ID keeps paths unpredictable and compact while making collisions negligible.
@@ -129,7 +160,7 @@ final class MediaStorage
                 'original_name' => $this->cleanOriginalName($upload['name'] ?? ''),
                 'mime' => $mime,
                 'size_bytes' => $storedSize,
-                'kind' => $isVideo ? 'video' : 'image',
+                'kind' => $isVideo ? 'video' : ($isAudio ? 'audio' : 'image'),
             ];
         }
 

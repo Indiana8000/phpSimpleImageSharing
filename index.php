@@ -310,7 +310,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             ':id' => $stored['id'], ':owner_id' => $currentUser['id'], ':storage_name' => $stored['storage_name'],
                             ':original_name' => $stored['original_name'], ':mime' => $stored['mime'],
                             ':size_bytes' => $stored['size_bytes'], ':created_at' => $createdAt, ':expires_at' => $expiresAt,
-                            ':poster_name' => $posterName, ':duration' => $isVideo ? $durationSeconds : null,
+                            ':poster_name' => $posterName, ':duration' => $stored['kind'] !== 'image' ? $durationSeconds : null,
                         ]);
                     } catch (Throwable $exception) {
                         $mediaStorage->delete($currentUser['id'], $stored['storage_name']);
@@ -638,7 +638,8 @@ if ($action === 'detail') {
     $backUrl = '?' . cleanQuery($listParams);
     $detailImageUrl = '?action=image&id=' . rawurlencode((string)$detail['id']);
     $detailIsVideo = MediaStorage::isVideoMime((string)$detail['mime']);
-    $detailNoun = $detailIsVideo ? 'video' : 'photo';
+    $detailIsAudio = MediaStorage::isAudioMime((string)$detail['mime']);
+    $detailNoun = $detailIsVideo ? 'video' : ($detailIsAudio ? 'audio file' : 'photo');
     $detailPoster = $detailIsVideo && (string)$detail['poster_name'] !== '' ? '?action=poster&id=' . rawurlencode((string)$detail['id']) : '';
     $canManage = $currentUser['role'] === 'admin' || $detail['owner_id'] === $currentUser['id'];
     $detailExpiry = expiryInfo($detail, time());
@@ -665,6 +666,12 @@ if ($action === 'detail') {
 <?php if ($detailIsVideo): ?>
       <video id="viewerVideo" controls playsinline preload="metadata" src="<?= h($detailImageUrl) ?>"<?= $detailPoster !== '' ? ' poster="' . h($detailPoster) . '"' : '' ?>>Your browser cannot play this video. <a href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>">Download it instead</a>.</video>
       <p class="banner vfail" id="videoFail" hidden>This video format can't be played in this browser. Download it instead.</p>
+<?php elseif ($detailIsAudio): ?>
+      <div class="afile">
+        <?= fileThumb((string)$detail['mime'], (string)$detail['storage_name']) ?>
+        <audio id="viewerVideo" controls preload="metadata" src="<?= h($detailImageUrl) ?>">Your browser cannot play this audio. <a href="?action=download&amp;id=<?= h(rawurlencode((string)$detail['id'])) ?>">Download it instead</a>.</audio>
+        <p class="banner vfail" id="videoFail" hidden>This audio format can't be played in this browser. Download it instead.</p>
+      </div>
 <?php else: ?>
       <img src="<?= h($detailImageUrl) ?>" fetchpriority="high" alt="<?= h((string)$detail['original_name']) ?>">
 <?php endif; ?>
@@ -680,7 +687,7 @@ if ($action === 'detail') {
           <dt>Added by</dt><dd><?= h((string)$detail['display_name']) ?></dd>
           <dt>Date</dt><dd><?= h(date('Y-m-d', (int)$detail['created_at'])) ?></dd>
           <dt>Size</dt><dd><?= h(formatBytes((int)$detail['size_bytes'])) ?></dd>
-<?php if ($detailIsVideo && $detail['duration_seconds'] !== null): ?>
+<?php if (($detailIsVideo || $detailIsAudio) && $detail['duration_seconds'] !== null): ?>
           <dt>Duration</dt><dd><?= h(formatDuration((int)$detail['duration_seconds'])) ?></dd>
 <?php endif; ?>
           <dt>Deleted on</dt><dd><?= $detailExpiry === null ? 'Kept until deleted' : h($detailExpiry['date'] . ' (' . $detailExpiry['label'] . ')') ?></dd>
@@ -747,12 +754,10 @@ pageStart('Photos & videos');
 if ($error) echo '<p class="banner error" role="alert">' . h($error) . '</p>';
 if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
 ?>
-<div class="title-row">
-  <div><h1>Photos &amp; videos</h1><p class="sub"><?= $totalImageCount ?> <?= $photoWord ?><?= $searchTerm !== '' ? ' matching “' . h($searchTerm) . '”' : '' ?></p></div>
-  <button class="btn primary" type="button" data-add-photos><?= icon('plus') ?>Add media</button>
-</div>
+<h1 class="sr">Gallery</h1>
 <form class="tools" method="get" action="./">
   <button class="sr" name="filter" value="<?= h($filter) ?>" id="applyFilters" tabindex="-1" aria-hidden="true">Apply</button>
+  <span class="count" title="<?= h($totalImageCount . ' ' . $photoWord . ($searchTerm !== '' ? ' matching “' . $searchTerm . '”' : '')) ?>"><?= (int)$totalImageCount ?> <?= $photoWord ?></span>
   <div class="seg" role="group" aria-label="Show">
     <button name="filter" value="all" aria-pressed="<?= $filter === 'all' ? 'true' : 'false' ?>">Everyone</button>
     <button name="filter" value="mine" aria-pressed="<?= $filter === 'mine' ? 'true' : 'false' ?>">Mine</button>
@@ -768,6 +773,7 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     $id = (string)$image['id'];
     $name = (string)$image['original_name'];
     $isVideo = MediaStorage::isVideoMime((string)$image['mime']);
+    $isAudio = MediaStorage::isAudioMime((string)$image['mime']);
     $imageUrl = '?action=image&id=' . rawurlencode($id);
     $detailUrl = '?' . cleanQuery(['action' => 'detail', 'id' => $id, 'q' => $searchTerm, 'sort' => $sortOrder, 'filter' => $filter, 'page' => $galleryPage]);
     $expiry = expiryInfo($image, $now);
@@ -775,8 +781,8 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
     $isShared = $canShare && isset($sharedIds[$id]);
     $caption = (string)$image['display_name'] . ', ' . date('Y-m-d', (int)$image['created_at']) . ($expiry !== null ? ', ' . $expiry['label'] : ''); ?>
   <article class="tile">
-    <a class="tile-link" href="<?= h($detailUrl) ?>" aria-label="<?= h(($isVideo ? 'Video ' : '') . $name . ', added by ' . (string)$image['display_name']) ?>"><?php if (!$isVideo): ?><img loading="lazy" decoding="async" src="<?= h($imageUrl) ?>" alt=""><?php elseif ((string)$image['poster_name'] !== ''): ?><img loading="lazy" decoding="async" src="<?= h('?action=poster&id=' . rawurlencode($id)) ?>" alt=""><?php else: ?><span class="vph"><?= icon('play') ?></span><?php endif; ?></a>
-    <?php if ($isVideo): ?><span class="vbadge"><?= icon('play') ?><?= $image['duration_seconds'] !== null ? h(formatDuration((int)$image['duration_seconds'])) : '' ?></span><?php endif; ?>
+    <a class="tile-link" href="<?= h($detailUrl) ?>" aria-label="<?= h(($isVideo ? 'Video ' : ($isAudio ? 'Audio ' : '')) . $name . ', added by ' . (string)$image['display_name']) ?>"><?php if ($isAudio): ?><?= fileThumb((string)$image['mime'], (string)$image['storage_name']) ?><?php elseif (!$isVideo): ?><img loading="lazy" decoding="async" src="<?= h($imageUrl) ?>" alt=""><?php elseif ((string)$image['poster_name'] !== ''): ?><img loading="lazy" decoding="async" src="<?= h('?action=poster&id=' . rawurlencode($id)) ?>" alt=""><?php else: ?><span class="vph"><?= icon('play') ?></span><?php endif; ?></a>
+    <?php if ($isVideo || $isAudio): ?><span class="vbadge"><?= icon('play') ?><?= $image['duration_seconds'] !== null ? h(formatDuration((int)$image['duration_seconds'])) : '' ?></span><?php endif; ?>
     <label class="pick"><input type="checkbox" form="bulkActionsForm" name="ids[]" value="<?= h($id) ?>" aria-label="Select <?= h($name) ?>"><span class="circle"><?= icon('check') ?></span></label>
     <?= avatar((string)$image['owner_id'], (string)$image['display_name'], 'av by') ?>
     <?php if ($canShare): ?><span class="shr" title="Has a share link"<?= $isShared ? '' : ' hidden' ?>><?= icon('link') ?><span class="sr">Has a share link</span></span>
@@ -808,12 +814,12 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
   <button type="button" class="icon-btn" id="clearSel" aria-label="Clear selection"><?= icon('close') ?></button>
 </form>
 <?php endif; ?>
-<input class="sr" id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,.mov" multiple>
+<input class="sr" id="imageFiles" type="file" name="images[]" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,.mov,audio/mpeg,audio/mp4,audio/ogg,audio/wav,audio/flac,audio/aac,.mp3,.m4a,.ogg,.wav,.flac,.aac" multiple>
 <dialog class="modal" id="uploadDialog" aria-labelledby="uploadTitle">
   <form class="sheet-in" id="uploadForm" method="post" action="?action=upload" enctype="multipart/form-data" data-max-image="<?= (int)$maxBytes ?>" data-max-video="<?= (int)$maxVideoBytes ?>">
     <input type="hidden" name="csrf" value="<?= h(csrf()) ?>">
-    <h2 id="uploadTitle">Add photos and videos</h2>
-    <p class="sub">Photos: JPEG, PNG, GIF or WebP, up to <?= h(formatBytes($maxBytes)) ?>. Videos: MP4, WebM or MOV, up to <?= h(formatBytes($maxVideoBytes)) ?>.</p>
+    <h2 id="uploadTitle">Add photos, videos and audio</h2>
+    <p class="sub">Photos: JPEG, PNG, GIF or WebP, up to <?= h(formatBytes($maxBytes)) ?>. Videos (MP4, WebM, MOV) and audio (MP3, M4A, OGG, WAV, FLAC, AAC): up to <?= h(formatBytes($maxVideoBytes)) ?>.</p>
     <button type="button" class="zone" data-add-photos><?= icon('upload') ?><strong>Drop files here</strong><span>or choose from your device</span></button>
     <div class="queue" id="uploadQueue" hidden><div class="queue-summary" id="queueSummary" aria-live="polite"></div><div class="queue-items" id="queueItems"></div></div>
 <?php $savedRetention = userDefaultRetention($pdo, (string)$currentUser['id']); ?>
@@ -832,6 +838,13 @@ if ($notice) echo '<p class="banner" role="status">' . h($notice) . '</p>';
 </dialog>
 <?php
 pageEnd();
+
+/** Generic file icon with a type symbol in the middle and the extension sticking out at the bottom right. */
+function fileThumb(string $mime, string $storageName): string {
+    $extension = strtoupper(substr((string)strrchr($storageName, '.'), 1));
+    $symbol = MediaStorage::isAudioMime($mime) ? '<path d="M10 17.5V8l7-1.5V15"/><circle cx="8" cy="17.5" r="2"/><circle cx="15" cy="15" r="2"/>' : '';
+    return '<span class="fthumb"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="fbody" d="M5 2h9l5 5v15H5z"/><path class="ffold" d="M14 2v5h5"/><g transform="translate(12 13) scale(.667) translate(-12.5 -13)">' . $symbol . '</g></svg><b>' . h($extension) . '</b></span>';
+}
 
 /** Inline icons (Lucide-style strokes). All markup here is static. */
 function icon(string $name): string {
@@ -993,6 +1006,7 @@ h2{margin:0}
 .banner.error{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface))}
 
 .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.count{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:var(--tint);color:var(--accent);font-size:13px;font-weight:700;white-space:nowrap}
 .seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--quiet);position:relative}
 .seg button,.seg label{border:0;background:transparent;padding:6px 14px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted);position:relative;cursor:pointer}
 .seg button[aria-pressed=true],.seg input:checked+span{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.14)}
@@ -1129,6 +1143,9 @@ fieldset.keep legend{font-weight:600;font-size:14px;margin-bottom:6px;padding:0}
 .stage img{max-width:100%;max-height:calc(100vh - 90px);max-height:calc(100dvh - 90px);border-radius:12px;display:block;object-fit:contain}
 .stage video{max-width:100%;max-height:calc(100vh - 90px);max-height:calc(100dvh - 90px);border-radius:12px;display:block;background:#000}
 .vfail{margin:12px 0 0}.vfail[hidden]{display:none}
+.fthumb{position:absolute;inset:0;display:grid;place-items:center;background:var(--quiet);color:var(--muted)}.fthumb svg{width:84px;height:84px;overflow:visible;fill:none;stroke:currentColor;stroke-width:1.2;stroke-linecap:round;stroke-linejoin:round}.fthumb .fbody{fill:var(--surface,var(--bg));stroke:currentColor}.fthumb .ffold{fill:var(--quiet)}.fthumb g{stroke:var(--accent,#4f46e5);stroke-width:1.8}
+.fthumb b{position:absolute;left:50%;top:50%;margin:35px 0 0 24.5px;transform:translate(-50%,-50%);padding:1px 6px;border-radius:5px;background:var(--accent,#4f46e5);color:#fff;font-size:11px;font-weight:700;letter-spacing:.03em;line-height:1.4}
+.afile{position:relative;display:grid;gap:14px;justify-items:center;width:min(480px,100%)}.afile .fthumb{position:relative;inset:auto;width:240px;height:240px;border-radius:16px}.afile .fthumb svg{width:165px;height:165px}.afile .fthumb b{margin:69px 0 0 48px;font-size:14px;padding:2px 8px}.afile audio{width:100%}
 .vph{position:absolute;inset:0;display:grid;place-items:center;background:var(--quiet);color:var(--muted)}.vph svg{width:34px;height:34px}
 .vbadge{position:absolute;left:8px;top:44px;z-index:1;display:inline-flex;align-items:center;gap:3px;padding:2px 7px 2px 5px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;pointer-events:none}.vbadge svg{width:10px;height:10px}
 .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;display:grid;place-items:center;text-decoration:none;backdrop-filter:blur(4px)}
@@ -1180,7 +1197,7 @@ function pageEnd(): void {
         echo '<dialog class="modal" id="confirmDialog" aria-labelledby="confirmTitle"><div class="sheet-in"><h2 id="confirmTitle"></h2><p class="sub" id="confirmText"></p><form method="dialog" class="foot"><button class="btn ghost" value="no">Cancel</button><button class="btn danger-solid" value="yes" id="confirmYes">Delete</button></form></div></dialog>';
         echo '<dialog class="modal" id="guideDialog" aria-labelledby="guideTitle"><div class="sheet-in"><h2 id="guideTitle">Quick guide</h2><ol class="guide">';
         echo '<li><strong>Only signed-in people can see the gallery.</strong><span>Everyone you add sees all photos.</span></li>';
-        echo '<li><strong>Add photos and videos</strong><span>Use the button at the top or drop files anywhere on the page. Choose how long to keep them.</span></li>';
+        echo '<li><strong>Add photos, videos and audio</strong><span>Use the button at the top or drop files anywhere on the page. Choose how long to keep them.</span></li>';
         echo '<li><strong>Share one photo</strong><span>Open a photo and create a share link. Anyone with the link can see that photo without signing in. A new link replaces the old one.</span></li>';
         echo '<li><strong>Select several photos</strong><span>Use the circle in a photo’s corner to copy links or delete your own photos.</span></li>';
         echo '<li><strong>The bar on each photo shows how long it stays.</strong><span>Deleting here does not remove copies others saved or backups.</span></li>';
@@ -1293,17 +1310,18 @@ function pageEnd(): void {
       for(const file of Array.from(list||[])){
         if(files.some(f=>f.file.name===file.name&&f.file.size===file.size&&f.file.lastModified===file.lastModified))continue;
         const row=document.createElement('div');row.className='qi';
-        const thumb=document.createElement('img');thumb.alt='';const isVideo=file.type.startsWith('video/')||/\.mov$/i.test(file.name);if(file.type.startsWith('image/'))thumb.src=URL.createObjectURL(file);else thumb.style.visibility='hidden';
+        const thumb=document.createElement('img');thumb.alt='';const isVideo=file.type.startsWith('video/')||/\.mov$/i.test(file.name),isAudio=file.type.startsWith('audio/')||/\.(mp3|m4a|ogg|wav|flac|aac)$/i.test(file.name);if(file.type.startsWith('image/'))thumb.src=URL.createObjectURL(file);else thumb.style.visibility='hidden';
         const body=document.createElement('div');
         const name=document.createElement('div');name.className='qn';name.textContent=file.name;
         const status=document.createElement('div');status.className='qs';status.textContent='Ready';status.setAttribute('aria-live','polite');
         const track=document.createElement('div');track.className='qt';track.setAttribute('role','progressbar');track.setAttribute('aria-label','Upload progress for '+file.name);track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow','0');
         const fill=document.createElement('i');track.append(fill);body.append(name,status,track);
         const drop=document.createElement('button');drop.type='button';drop.className='qx';drop.setAttribute('aria-label','Remove '+file.name);drop.textContent='×';
-        const entry={file,row,status,fill,track,done:false,failed:false,isVideo,poster:null,duration:null};
-        const limit=Number(isVideo?form.dataset.maxVideo:form.dataset.maxImage);
+        const entry={file,row,status,fill,track,done:false,failed:false,isVideo,isAudio,poster:null,duration:null};
+        const limit=Number(isVideo||isAudio?form.dataset.maxVideo:form.dataset.maxImage);
         entry.ready=Promise.resolve();
         if(limit&&file.size>limit){entry.tooLarge=true;entry.failed=true;status.className='qs fail';status.textContent='Too large (limit '+(limit/1048576).toFixed(0)+' MiB)'}
+        else if(isAudio)entry.ready=audioLength(file).then(length=>{entry.duration=length});
         else if(isVideo)entry.ready=videoPoster(file).then(result=>{if(!result)return;entry.poster=result.blob;entry.duration=result.duration;if(result.url){thumb.src=result.url;thumb.style.visibility=''}});
         drop.addEventListener('click',()=>{if(busy)return;if(thumb.src.startsWith('blob:'))URL.revokeObjectURL(thumb.src);row.remove();files=files.filter(f=>f!==entry);syncQueue()});
         row.append(thumb,body,drop);items.append(row);
@@ -1311,6 +1329,15 @@ function pageEnd(): void {
       }
       syncQueue();
     }
+    // Read the length of an audio file in the browser; resolves 0 when it cannot be decoded.
+    function audioLength(file){return new Promise(resolve=>{
+      const audio=document.createElement('audio'),src=URL.createObjectURL(file);
+      const done=value=>{clearTimeout(timer);audio.removeAttribute('src');audio.load();URL.revokeObjectURL(src);resolve(value)};
+      const timer=setTimeout(()=>done(0),8000);
+      audio.preload='metadata';audio.addEventListener('error',()=>done(0));
+      audio.addEventListener('loadedmetadata',()=>done(isFinite(audio.duration)?Math.round(audio.duration):0));
+      audio.src=src;
+    })}
     // Grab one frame in the browser so the server needs no video tools. Resolves null when the browser cannot decode the file.
     function videoPoster(file){return new Promise(resolve=>{
       const video=document.createElement('video'),src=URL.createObjectURL(file);let finished=false;
@@ -1345,7 +1372,7 @@ function pageEnd(): void {
 
     function upload(entry){return new Promise(resolve=>{
       const body=new FormData();body.append('csrf',form.querySelector('[name="csrf"]').value);body.append('retention',form.querySelector('[name="retention"]:checked').value);if(remember.checked)body.append('remember_default','1');body.append('images[]',entry.file,entry.file.name);
-      if(entry.isVideo){if(entry.poster)body.append('poster',entry.poster,'poster.jpg');if(entry.duration)body.append('duration',String(entry.duration))}
+      if(entry.isVideo||entry.isAudio){if(entry.poster)body.append('poster',entry.poster,'poster.jpg');if(entry.duration)body.append('duration',String(entry.duration))}
       const xhr=new XMLHttpRequest();xhr.open('POST',form.action);xhr.timeout=Math.max(120000,Math.round(entry.file.size/262144)*1000);xhr.setRequestHeader('Accept','application/json');
       const fail=text=>{entry.status.className='qs fail';entry.status.textContent=text;resolve(false)};
       xhr.upload.addEventListener('progress',event=>{if(event.lengthComputable){const percent=Math.round(event.loaded/event.total*100);entry.fill.style.width=percent+'%';entry.track.setAttribute('aria-valuenow',String(percent))}});
@@ -1373,7 +1400,7 @@ function pageEnd(): void {
   }
 
   document.addEventListener('keydown',event=>{
-    if($('dialog[open]')||event.target.closest('input,select,textarea,video'))return;
+    if($('dialog[open]')||event.target.closest('input,select,textarea,video,audio'))return;
     const link=event.key==='ArrowLeft'?$('a[rel="prev"]'):event.key==='ArrowRight'?$('a[rel="next"]'):null;
     if(link)link.click();
   });
@@ -1549,7 +1576,7 @@ function sendMediaFile(string $file, string $mime, ?string $downloadName): never
     header('Cache-Control: private, no-store');
     if ($downloadName !== null) {
         header('Content-Disposition: attachment; filename="download"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
-    } elseif (MediaStorage::isVideoMime($mime)) {
+    } elseif (MediaStorage::isVideoMime($mime) || MediaStorage::isAudioMime($mime)) {
         // Opened directly, the browser's player page loads the file as media; 'none' or a sandbox would block it.
         header('Content-Security-Policy: default-src \'none\'; media-src \'self\'');
     } else {

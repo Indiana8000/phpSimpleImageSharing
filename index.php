@@ -65,7 +65,10 @@ try {
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 ini_set('session.cookie_httponly', '1');
-ini_set('session.cookie_samesite', 'Strict');
+// Lax, not Strict: with Strict the browser omits the cookie on links from other apps (mail, chat),
+// PHP then starts a fresh anonymous session and its Set-Cookie overwrites the signed-in one.
+// State-changing requests are POST-only and CSRF-protected, so Lax is sufficient.
+ini_set('session.cookie_samesite', 'Lax');
 const SESSION_LIFETIME = 30 * 86400;
 const SESSION_MAX_AGE = 90 * 86400;
 // Own save path: shared hosts often clean the default one after a short gc_maxlifetime.
